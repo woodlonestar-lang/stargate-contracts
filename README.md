@@ -27,3 +27,9 @@ scripts/deploy_testnet.sh
 ```
 
 Mainnet deployment is intentionally manual and must go through multi-sig governance.
+
+See `docs/MAINNET_DEPLOYMENT.md` for the live deployment checklist and signing ceremony.
+
+## License
+
+MIT

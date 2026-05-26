@@ -3,3 +3,4 @@ target/
 .env.mainnet
 .env.testnet
 *.wasm
+artifacts/addresses.json

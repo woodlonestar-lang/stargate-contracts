@@ -46,6 +46,13 @@ cp .env.testnet.example .env.testnet
 scripts/deploy_testnet.sh
 ```
 
+After deployment, contract IDs are exported to `artifacts/addresses.json` (gitignored; environment-specific). See `artifacts/addresses.json.example` for the schema:
+
+- `network`: Stellar network name (for example `testnet`)
+- `contracts[]`: `name` and deployed `address` for each contract
+
+Override the output path with `DEPLOYED_ADDRESSES_FILE` when calling `scripts/export_deployed_addresses.sh`.
+
 Mainnet deployment is intentionally manual and must go through multi-sig governance.
 
 See `docs/MAINNET_DEPLOYMENT.md` for the live deployment checklist and signing ceremony.

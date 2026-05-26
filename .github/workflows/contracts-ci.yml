@@ -17,5 +17,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy -- -D warnings
+      - run: bash scripts/lint-docs.sh
       - run: cargo test
       - run: cargo build --target wasm32-unknown-unknown --release

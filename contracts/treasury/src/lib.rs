@@ -99,8 +99,9 @@ impl TreasuryContract {
         settlement
     }
 
-    pub fn execute_settlement(env: Env, settlement_id: u64, token_contract: Address) {
+    pub fn execute_settlement(env: Env, signer: Address, settlement_id: u64, token_contract: Address) {
         Self::require_not_paused(&env);
+        require_authorized_signer(&env, &signer);
         let mut settlement: Settlement = env
             .storage()
             .persistent()
@@ -135,13 +136,14 @@ impl TreasuryContract {
         let mut pending = Vec::new(&env);
         let mut id = 1;
         while id <= count {
-            let settlement: Settlement = env
+            if let Some(settlement) = env
                 .storage()
                 .persistent()
-                .get(&DataKey::Settlement(id))
-                .unwrap();
-            if settlement.status == SettlementStatus::Pending {
-                pending.push_back(settlement);
+                .get::<DataKey, Settlement>(&DataKey::Settlement(id))
+            {
+                if settlement.status == SettlementStatus::Pending {
+                    pending.push_back(settlement);
+                }
             }
             id += 1;
         }

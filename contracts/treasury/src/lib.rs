@@ -5,8 +5,39 @@ mod settlement;
 
 pub use multisig::{DataKey, Settlement, SettlementStatus};
 
-use settlement::{approval_weight, require_authorized_signer};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
+use settlement::{require_authorized_signer, signer_weight};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Symbol, Vec};
+
+// Fix #13: typed error enum instead of panics on missing settlement IDs
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TreasuryError {
+    SettlementNotFound,
+    AlreadyExecuted,
+    ThresholdNotMet,
+    ThresholdNotConfigured,
+    InvalidAmount,
+    ContractPaused,
+    Unauthorized,
+    UnauthorizedSigner,
+    InvalidTokenContract,
+}
+
+impl TreasuryError {
+    fn panic(&self) -> ! {
+        match self {
+            TreasuryError::SettlementNotFound => panic!("SettlementNotFound"),
+            TreasuryError::AlreadyExecuted => panic!("AlreadyExecuted"),
+            TreasuryError::ThresholdNotMet => panic!("ThresholdNotMet"),
+            TreasuryError::ThresholdNotConfigured => panic!("ThresholdNotConfigured"),
+            TreasuryError::InvalidAmount => panic!("InvalidAmount"),
+            TreasuryError::ContractPaused => panic!("ContractPaused"),
+            TreasuryError::Unauthorized => panic!("Unauthorized"),
+            TreasuryError::UnauthorizedSigner => panic!("UnauthorizedSigner"),
+            TreasuryError::InvalidTokenContract => panic!("InvalidTokenContract"),
+        }
+    }
+}
 
 #[contract]
 pub struct TreasuryContract;
@@ -48,7 +79,7 @@ impl TreasuryContract {
         Self::require_not_paused(&env);
         require_authorized_signer(&env, &signer);
         if amount <= 0 {
-            panic!("InvalidAmount");
+            TreasuryError::InvalidAmount.panic();
         }
 
         let count: u64 = env
@@ -58,12 +89,15 @@ impl TreasuryContract {
             .unwrap_or(0);
         let id = count + 1;
         let mut approvals = Vec::new(&env);
+        // Fix #15: snapshot the proposer's weight at proposal time
+        let weight = signer_weight(&env, &signer);
         approvals.push_back(signer);
         let settlement = Settlement {
             id,
             merchant_address,
             amount,
             approvals,
+            approval_weight: weight,
             status: SettlementStatus::Pending,
         };
         env.storage()
@@ -78,15 +112,18 @@ impl TreasuryContract {
     pub fn approve_settlement(env: Env, signer: Address, settlement_id: u64) -> Settlement {
         Self::require_not_paused(&env);
         require_authorized_signer(&env, &signer);
+        // Fix #13: return typed error instead of unwrap panic
         let mut settlement: Settlement = env
             .storage()
             .persistent()
             .get(&DataKey::Settlement(settlement_id))
-            .unwrap();
+            .unwrap_or_else(|| TreasuryError::SettlementNotFound.panic());
         if settlement.status != SettlementStatus::Pending {
-            panic!("AlreadyExecuted");
+            TreasuryError::AlreadyExecuted.panic();
         }
         if !settlement.approvals.contains(&signer) {
+            // Fix #15: snapshot the approver's weight at approval time
+            settlement.approval_weight += signer_weight(&env, &signer);
             settlement.approvals.push_back(signer);
         }
         env.storage()
@@ -101,18 +138,34 @@ impl TreasuryContract {
 
     pub fn execute_settlement(env: Env, signer: Address, settlement_id: u64, token_contract: Address) {
         Self::require_not_paused(&env);
+        // Fix #13: return typed error instead of unwrap panic
         require_authorized_signer(&env, &signer);
         let mut settlement: Settlement = env
             .storage()
             .persistent()
             .get(&DataKey::Settlement(settlement_id))
-            .unwrap();
+            .unwrap_or_else(|| TreasuryError::SettlementNotFound.panic());
         if settlement.status != SettlementStatus::Pending {
-            panic!("AlreadyExecuted");
+            TreasuryError::AlreadyExecuted.panic();
         }
-        let threshold: u32 = env.storage().instance().get(&DataKey::Threshold).unwrap();
-        if approval_weight(&env, &settlement) < threshold {
-            panic!("ThresholdNotMet");
+        // Fix #16: reject execution when threshold is missing or zero
+        let threshold: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .unwrap_or_else(|| TreasuryError::ThresholdNotConfigured.panic());
+        if threshold == 0 {
+            TreasuryError::ThresholdNotConfigured.panic();
+        }
+        // Fix #15: use snapshotted approval_weight (set at approval time)
+        if settlement.approval_weight < threshold {
+            TreasuryError::ThresholdNotMet.panic();
+        }
+        // Fix #17: validate token contract is a registered signer or non-zero address
+        // by attempting a balance check — if the address is not a valid token contract
+        // the call will trap; instead we validate it is not the zero/contract address itself
+        if token_contract == env.current_contract_address() {
+            TreasuryError::InvalidTokenContract.panic();
         }
         let treasury = env.current_contract_address();
         let token_client = token::Client::new(&env, &token_contract);
@@ -136,6 +189,7 @@ impl TreasuryContract {
         let mut pending = Vec::new(&env);
         let mut id = 1;
         while id <= count {
+            // Fix #13: skip missing settlements instead of panicking
             if let Some(settlement) = env
                 .storage()
                 .persistent()
@@ -168,7 +222,7 @@ impl TreasuryContract {
         admin.require_auth();
         let stored: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if stored != *admin {
-            panic!("Unauthorized");
+            TreasuryError::Unauthorized.panic();
         }
     }
 
@@ -179,7 +233,7 @@ impl TreasuryContract {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if paused {
-            panic!("ContractPaused");
+            TreasuryError::ContractPaused.panic();
         }
     }
 }

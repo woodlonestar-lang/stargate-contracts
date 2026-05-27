@@ -14,6 +14,7 @@ pub struct Settlement {
     pub merchant_address: Address,
     pub amount: i128,
     pub approvals: Vec<Address>,
+    pub approval_weight: u32,
     pub status: SettlementStatus,
 }
 

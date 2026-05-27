@@ -1220,6 +1220,7 @@ dependencies = [
  "derive_arbitrary",
  "soroban-sdk",
  "stargate-compliance",
+ "stargate-invoice",
 ]
 
 [[package]]

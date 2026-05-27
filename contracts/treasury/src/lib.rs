@@ -47,7 +47,9 @@ impl TreasuryContract {
     pub fn initialize(env: Env, admin: Address, threshold: u32) {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
         env.storage()
             .instance()
             .set(&DataKey::SettlementCount, &0u64);
@@ -101,9 +103,7 @@ impl TreasuryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Settlement(id), &settlement);
-        env.storage()
-            .instance()
-            .set(&DataKey::SettlementCount, &id);
+        env.storage().instance().set(&DataKey::SettlementCount, &id);
         env.events()
             .publish((Symbol::new(&env, "settlement_proposed"), id), settlement);
         id
@@ -136,9 +136,10 @@ impl TreasuryContract {
         settlement
     }
 
-    pub fn execute_settlement(env: Env, settlement_id: u64, token_contract: Address) {
+    pub fn execute_settlement(env: Env, signer: Address, settlement_id: u64, token_contract: Address) {
         Self::require_not_paused(&env);
         // Fix #13: return typed error instead of unwrap panic
+        require_authorized_signer(&env, &signer);
         let mut settlement: Settlement = env
             .storage()
             .persistent()
@@ -206,11 +207,15 @@ impl TreasuryContract {
     pub fn pause(env: Env, admin: Address) {
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&DataKey::Paused, &true);
+        env.events()
+            .publish((Symbol::new(&env, "treasury_paused"),), admin);
     }
 
     pub fn unpause(env: Env, admin: Address) {
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.events()
+            .publish((Symbol::new(&env, "treasury_unpaused"),), admin);
     }
 
     fn require_admin(env: &Env, admin: &Address) {

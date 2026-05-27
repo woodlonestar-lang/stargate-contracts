@@ -14,8 +14,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+      # Cache Rust toolchain and target/ directory to speed up builds
       - uses: Swatinem/rust-cache@v2
+      # Verify code formatting: fail if cargo fmt would make changes
       - run: cargo fmt --all -- --check
+      # Run clippy lints with all warnings treated as errors (-D warnings)
       - run: cargo clippy -- -D warnings
+      # Run all unit and integration tests
+      - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      # Build WASM binaries for Soroban runtime
       - run: cargo build --target wasm32-unknown-unknown --release

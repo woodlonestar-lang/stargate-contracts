@@ -16,9 +16,7 @@ pub struct InvoiceContract;
 impl InvoiceContract {
     pub fn initialize(env: Env, admin: Address) {
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::InvoiceCount, &0u64);
+        env.storage().instance().set(&DataKey::InvoiceCount, &0u64);
         env.storage().instance().set(&DataKey::Paused, &false);
     }
 
@@ -59,7 +57,12 @@ impl InvoiceContract {
         Ok(id)
     }
 
-    pub fn mark_paid(env: Env, admin: Address, id: u64, payer: Address) -> Result<(), InvoiceError> {
+    pub fn mark_paid(
+        env: Env,
+        admin: Address,
+        id: u64,
+        payer: Address,
+    ) -> Result<(), InvoiceError> {
         require_admin(&env, &admin)?;
         require_not_paused(&env)?;
 

@@ -11,9 +11,60 @@ This repository owns invoice escrow state, payment validation, multi-sig treasur
 - `contracts/compliance`: admin-managed allow/block list
 - `abis`: committed ABI metadata consumed by `stargate-backend`
 
-## Verification
+## Local Development
+
+### Starting the Local Environment
+
+Requires Docker and Docker Compose.
 
 ```sh
+docker-compose up -d
+```
+
+This starts:
+- **Soroban Node**: Stellar quickstart (Horizon at `http://localhost:8000`)
+- **Redis**: Event consumer backing service (port 6379)
+
+Check service health:
+```sh
+docker-compose ps
+curl http://localhost:8000/health
+```
+
+### Deploying Contracts Locally
+
+```sh
+cp .env.local.example .env.local
+# Edit .env.local with your test keys
+scripts/deploy_local.sh  # if available, or use stellar-cli with soroban
+```
+
+### Tearing Down
+
+```sh
+docker-compose down
+# To also remove persistent data:
+docker-compose down -v
+```
+
+## Development Tasks
+
+This project uses `just` for common contract development commands. Install from https://github.com/casey/just.
+
+```sh
+# Format code
+just fmt
+
+# Run lints
+just lint
+
+# Run tests
+just test
+
+# Run all checks (format, lint, test)
+just check
+
+# Or use cargo directly
 cargo fmt --all
 cargo clippy -- -D warnings
 cargo test

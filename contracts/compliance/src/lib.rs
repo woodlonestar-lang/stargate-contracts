@@ -40,9 +40,10 @@ impl ComplianceContract {
             .publish((Symbol::new(&env, "address_allowed"),), address);
     }
 
+    // Emergency policy: block_address and clear_address are permitted while paused
+    // so the admin can remediate compromised addresses without unpausing first.
     pub fn block_address(env: Env, admin: Address, address: Address) {
         Self::require_admin(&env, &admin);
-        Self::require_not_paused(&env);
         env.storage()
             .persistent()
             .set(&DataKey::Blocked(address.clone()), &true);
@@ -52,7 +53,6 @@ impl ComplianceContract {
 
     pub fn clear_address(env: Env, admin: Address, address: Address) {
         Self::require_admin(&env, &admin);
-        Self::require_not_paused(&env);
         env.storage()
             .persistent()
             .set(&DataKey::Blocked(address.clone()), &false);
@@ -66,11 +66,15 @@ impl ComplianceContract {
     pub fn pause(env: Env, admin: Address) {
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&DataKey::Paused, &true);
+        env.events()
+            .publish((Symbol::new(&env, "compliance_paused"),), admin);
     }
 
     pub fn unpause(env: Env, admin: Address) {
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.events()
+            .publish((Symbol::new(&env, "compliance_unpaused"),), admin);
     }
 
     fn require_admin(env: &Env, admin: &Address) {
@@ -82,7 +86,11 @@ impl ComplianceContract {
     }
 
     fn require_not_paused(env: &Env) {
-        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if paused {
             panic!("ContractPaused");
         }

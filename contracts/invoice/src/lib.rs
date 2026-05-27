@@ -14,12 +14,15 @@ pub struct InvoiceContract;
 
 #[contractimpl]
 impl InvoiceContract {
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), InvoiceError> {
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(InvoiceError::AlreadyInitialized);
+        }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::InvoiceCount, &0u64);
+        env.storage().instance().set(&DataKey::InvoiceCount, &0u64);
         env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
     }
 
     pub fn create_invoice(
@@ -33,13 +36,21 @@ impl InvoiceContract {
         require_not_paused(&env)?;
         require_positive_amount(amount_usdc, gross_usdc)?;
 
+        if expires_in_seconds == 0 {
+            return Err(InvoiceError::ZeroDuration);
+        }
+
         let count: u64 = env
             .storage()
             .instance()
             .get(&DataKey::InvoiceCount)
             .unwrap_or(0);
         let id = count + 1;
-        let expires_at = env.ledger().timestamp() + expires_in_seconds;
+        let expires_at = env
+            .ledger()
+            .timestamp()
+            .checked_add(expires_in_seconds)
+            .ok_or(InvoiceError::ExpiryOverflow)?;
         let invoice = Invoice {
             id,
             merchant: merchant.clone(),
@@ -59,7 +70,12 @@ impl InvoiceContract {
         Ok(id)
     }
 
-    pub fn mark_paid(env: Env, admin: Address, id: u64, payer: Address) -> Result<(), InvoiceError> {
+    pub fn mark_paid(
+        env: Env,
+        admin: Address,
+        id: u64,
+        payer: Address,
+    ) -> Result<(), InvoiceError> {
         require_admin(&env, &admin)?;
         require_not_paused(&env)?;
 

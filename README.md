@@ -47,9 +47,24 @@ docker-compose down
 docker-compose down -v
 ```
 
-## Verification
+## Development Tasks
+
+This project uses `just` for common contract development commands. Install from https://github.com/casey/just.
 
 ```sh
+# Format code
+just fmt
+
+# Run lints
+just lint
+
+# Run tests
+just test
+
+# Run all checks (format, lint, test)
+just check
+
+# Or use cargo directly
 cargo fmt --all
 cargo clippy -- -D warnings
 cargo test

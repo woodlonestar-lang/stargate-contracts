@@ -20,6 +20,7 @@ jobs:
       - run: cargo fmt --all -- --check
       # Run clippy lints with all warnings treated as errors (-D warnings)
       - run: cargo clippy -- -D warnings
+      - run: bash scripts/lint-docs.sh
       # Run all unit and integration tests
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test

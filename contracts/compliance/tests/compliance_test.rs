@@ -1,4 +1,4 @@
-use compliance::{ComplianceContract, ComplianceContractClient};
+use compliance::{ComplianceContract, ComplianceContractClient, ContractError};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, Address, Address, ComplianceContractClient<'static>) {
@@ -215,4 +215,34 @@ fn emits_address_cleared_event() {
     assert!(client.is_allowed(&subject));
     // Events are captured by the snapshot test harness; no additional assertions needed here.
     let _ = env;
+}
+
+#[test]
+fn allow_address_returns_unauthorized_for_non_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let address = Address::generate(&env);
+    let id = env.register_contract(None, ComplianceContract);
+    let client = ComplianceContractClient::new(&env, &id);
+    client.initialize(&admin);
+
+    let result = client.try_allow_address(&non_admin, &address);
+    assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+}
+
+#[test]
+fn allow_address_returns_contract_paused_when_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let address = Address::generate(&env);
+    let id = env.register_contract(None, ComplianceContract);
+    let client = ComplianceContractClient::new(&env, &id);
+    client.initialize(&admin);
+    client.pause(&admin);
+
+    let result = client.try_allow_address(&admin, &address);
+    assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
 }

@@ -4,7 +4,9 @@ use soroban_sdk::{contracttype, Address};
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
+    PendingAdmin,
     Allowed(Address),
     Blocked(Address),
+    AllowedUntil(Address),
     Paused,
 }

@@ -1,4 +1,4 @@
-use crate::multisig::{DataKey, Settlement};
+use crate::multisig::DataKey;
 use soroban_sdk::{Address, Env};
 
 pub fn signer_weight(env: &Env, signer: &Address) -> u32 {

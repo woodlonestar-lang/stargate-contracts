@@ -1,5 +1,13 @@
 use soroban_sdk::{contracterror, contracttype, Address, Bytes};
 
+// soroban contracttype cannot store Option<Address> directly; use a tagged-union workaround
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MaybeAddress {
+    None,
+    Some(Address),
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -13,6 +21,7 @@ pub enum InvoiceError {
     AlreadyInitialized = 7,
     ZeroDuration = 8,
     ExpiryOverflow = 9,
+    NotPaid = 10,
 }
 
 #[contracttype]
@@ -22,6 +31,7 @@ pub enum InvoiceStatus {
     Paid,
     Expired,
     Cancelled,
+    RefundRequested,
 }
 
 // contracttype enum wrappers for optional complex types; Option<Address> and

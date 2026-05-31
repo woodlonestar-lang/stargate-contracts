@@ -3,29 +3,15 @@
 mod multisig;
 mod settlement;
 
-pub use multisig::{DataKey, Dispute, DisputeStatus, Settlement, SettlementStatus, TreasuryError};
+pub use multisig::{
+    DataKey, Dispute, DisputeStatus, Settlement, SettlementHoldReason, SettlementStatus,
+    TreasuryError,
+};
 
 use settlement::{require_authorized_signer, signer_weight};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
 
-impl TreasuryError {
-    fn panic(&self) -> ! {
-        match self {
-            TreasuryError::AlreadyInitialized => panic!("AlreadyInitialized"),
-            TreasuryError::ZeroThreshold => panic!("ZeroThreshold"),
-            TreasuryError::SettlementNotFound => panic!("SettlementNotFound"),
-            TreasuryError::AlreadyExecuted => panic!("AlreadyExecuted"),
-            TreasuryError::ThresholdNotMet => panic!("ThresholdNotMet"),
-            TreasuryError::ThresholdNotConfigured => panic!("ThresholdNotConfigured"),
-            TreasuryError::InvalidAmount => panic!("InvalidAmount"),
-            TreasuryError::ContractPaused => panic!("ContractPaused"),
-            TreasuryError::Unauthorized => panic!("Unauthorized"),
-            TreasuryError::UnauthorizedSigner => panic!("UnauthorizedSigner"),
-            TreasuryError::InvalidTokenContract => panic!("InvalidTokenContract"),
-        }
-    }
-}
 
 #[contract]
 pub struct TreasuryContract;
@@ -95,6 +81,7 @@ impl TreasuryContract {
             approvals,
             approval_weight: weight,
             status: SettlementStatus::Pending,
+            hold_reason: SettlementHoldReason::None,
         };
         env.storage()
             .persistent()
@@ -132,7 +119,12 @@ impl TreasuryContract {
         settlement
     }
 
-    pub fn execute_settlement(env: Env, signer: Address, settlement_id: u64, token_contract: Address) {
+    pub fn execute_settlement(
+        env: Env,
+        signer: Address,
+        settlement_id: u64,
+        token_contract: Address,
+    ) {
         Self::require_not_paused(&env);
         // Fix #13: return typed error instead of unwrap panic
         require_authorized_signer(&env, &signer);
@@ -141,6 +133,9 @@ impl TreasuryContract {
             .persistent()
             .get(&DataKey::Settlement(settlement_id))
             .unwrap_or_else(|| panic!("SettlementNotFound"));
+        if settlement.status == SettlementStatus::OnHold {
+            panic!("SettlementOnHold");
+        }
         if settlement.status != SettlementStatus::Pending {
             panic!("AlreadyExecuted");
         }
@@ -172,6 +167,26 @@ impl TreasuryContract {
             .set(&DataKey::Settlement(settlement_id), &settlement);
         env.events().publish(
             (Symbol::new(&env, "settlement_executed"), settlement_id),
+            settlement,
+        );
+    }
+
+    pub fn cancel_settlement(env: Env, admin: Address, settlement_id: u64) {
+        Self::require_admin(&env, &admin);
+        let mut settlement: Settlement = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Settlement(settlement_id))
+            .unwrap_or_else(|| panic!("SettlementNotFound"));
+        if settlement.status != SettlementStatus::Pending {
+            panic!("AlreadyExecuted");
+        }
+        settlement.status = SettlementStatus::Cancelled;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Settlement(settlement_id), &settlement);
+        env.events().publish(
+            (Symbol::new(&env, "settlement_cancelled"), settlement_id),
             settlement,
         );
     }
@@ -322,6 +337,78 @@ impl TreasuryContract {
         token_client.transfer(&treasury, &to, &amount);
         env.events()
             .publish((Symbol::new(&env, "withdraw"), to), amount);
+    }
+
+    // Issue #47: merchant payout address update workflow
+    pub fn update_merchant_payout_address(
+        env: Env,
+        merchant: Address,
+        new_payout_address: Address,
+    ) {
+        Self::require_not_paused(&env);
+        merchant.require_auth();
+        env.storage().instance().set(
+            &DataKey::MerchantPayoutAddress(merchant.clone()),
+            &new_payout_address,
+        );
+        env.events().publish(
+            (Symbol::new(&env, "merchant_payout_updated"), merchant),
+            new_payout_address,
+        );
+    }
+
+    pub fn get_merchant_payout_address(env: Env, merchant: Address) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::MerchantPayoutAddress(merchant))
+    }
+
+    // Issue #48: hold and release settlements with reason codes
+    pub fn hold_settlement(
+        env: Env,
+        admin: Address,
+        settlement_id: u64,
+        reason: SettlementHoldReason,
+    ) {
+        Self::require_admin(&env, &admin);
+        let mut settlement: Settlement = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Settlement(settlement_id))
+            .unwrap_or_else(|| panic!("SettlementNotFound"));
+        if settlement.status != SettlementStatus::Pending {
+            panic!("AlreadyExecuted");
+        }
+        settlement.status = SettlementStatus::OnHold;
+        settlement.hold_reason = reason.clone();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Settlement(settlement_id), &settlement);
+        env.events().publish(
+            (Symbol::new(&env, "settlement_held"), settlement_id),
+            reason,
+        );
+    }
+
+    pub fn release_hold(env: Env, admin: Address, settlement_id: u64) {
+        Self::require_admin(&env, &admin);
+        let mut settlement: Settlement = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Settlement(settlement_id))
+            .unwrap_or_else(|| panic!("SettlementNotFound"));
+        if settlement.status != SettlementStatus::OnHold {
+            panic!("NotOnHold");
+        }
+        settlement.status = SettlementStatus::Pending;
+        settlement.hold_reason = SettlementHoldReason::None;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Settlement(settlement_id), &settlement);
+        env.events().publish(
+            (Symbol::new(&env, "settlement_released"), settlement_id),
+            settlement,
+        );
     }
 
     fn require_admin(env: &Env, admin: &Address) {

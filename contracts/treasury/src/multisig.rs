@@ -15,6 +15,18 @@ pub enum TreasuryError {
     Unauthorized = 9,
     UnauthorizedSigner = 10,
     InvalidTokenContract = 11,
+    SettlementOnHold = 12,
+}
+
+// Issue #48: reason codes attached to a held settlement; None means not on hold
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettlementHoldReason {
+    None,
+    ComplianceReview,
+    FraudCheck,
+    KycPending,
+    AdminHold,
 }
 
 #[contracttype]
@@ -22,6 +34,8 @@ pub enum TreasuryError {
 pub enum SettlementStatus {
     Pending,
     Executed,
+    OnHold,
+    Cancelled,
 }
 
 #[contracttype]
@@ -41,6 +55,7 @@ pub struct Settlement {
     pub approvals: Vec<Address>,
     pub approval_weight: u32,
     pub status: SettlementStatus,
+    pub hold_reason: SettlementHoldReason,
 }
 
 #[contracttype]
@@ -66,4 +81,5 @@ pub enum DataKey {
     DisputeCount,
     Dispute(u64),
     Balance(Address),
+    MerchantPayoutAddress(Address),
 }

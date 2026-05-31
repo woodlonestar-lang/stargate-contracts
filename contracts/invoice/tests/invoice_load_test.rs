@@ -1,4 +1,4 @@
-use invoice::{InvoiceContract, InvoiceContractClient, InvoiceStatus};
+use invoice::{InvoiceContract, InvoiceContractClient, InvoiceStatus, MaybeBytes};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env,
@@ -34,7 +34,14 @@ fn high_volume_invoice_creation_storage_budget() {
     let mut observed_storage_entries: u64 = 0;
 
     for i in 1..=total {
-        let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
+        let id = client.create_invoice(
+            &merchant,
+            &10_000_000,
+            &10_250_000,
+            &3600,
+            &MaybeBytes::None,
+            &MaybeBytes::None,
+        );
         assert_eq!(id, i);
         last_id = id;
 

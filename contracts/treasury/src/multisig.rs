@@ -15,6 +15,21 @@ pub enum TreasuryError {
     Unauthorized = 9,
     UnauthorizedSigner = 10,
     InvalidTokenContract = 11,
+    TokenNotAllowed = 12,
+    RotationNotFound = 13,
+    RotationAlreadyExecuted = 14,
+    SettlementOnHold = 12,
+}
+
+// Issue #48: reason codes attached to a held settlement; None means not on hold
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SettlementHoldReason {
+    None,
+    ComplianceReview,
+    FraudCheck,
+    KycPending,
+    AdminHold,
 }
 
 #[contracttype]
@@ -22,6 +37,9 @@ pub enum TreasuryError {
 pub enum SettlementStatus {
     Pending,
     Executed,
+    PartiallyExecuted,
+    OnHold,
+    Cancelled,
 }
 
 #[contracttype]
@@ -41,6 +59,7 @@ pub struct Settlement {
     pub approvals: Vec<Address>,
     pub approval_weight: u32,
     pub status: SettlementStatus,
+    pub hold_reason: SettlementHoldReason,
 }
 
 #[contracttype]
@@ -52,6 +71,27 @@ pub struct Dispute {
     pub counterparty: Address,
     pub amount: i128,
     pub status: DisputeStatus,
+    pub resolution_approvals: Vec<Address>,
+    pub resolution_weight: u32,
+    pub resolution_for_claimant: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RotationStatus {
+    Pending,
+    Executed,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignerRotationProposal {
+    pub id: u64,
+    pub old_signer: Address,
+    pub new_signer: Address,
+    pub approvals: Vec<Address>,
+    pub approval_weight: u32,
+    pub status: RotationStatus,
 }
 
 #[contracttype]
@@ -66,4 +106,8 @@ pub enum DataKey {
     DisputeCount,
     Dispute(u64),
     Balance(Address),
+    TokenAllowlist,
+    RotationCount,
+    SignerRotation(u64),
+    MerchantPayoutAddress(Address),
 }

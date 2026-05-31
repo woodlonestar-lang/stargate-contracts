@@ -1,5 +1,6 @@
 use invoice::{
     InvoiceContract, InvoiceContractClient, InvoiceError, InvoiceStatus, OptionalAddress,
+    InvoiceContract, InvoiceContractClient, InvoiceError, InvoiceStatus, MaybeAddress, MaybeBytes,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -22,12 +23,22 @@ fn test_create_invoice_succeeds() {
     let merchant = Address::generate(&env);
     let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
     let invoice = client.get_invoice(&id);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
+    let invoice = client.get_invoice(&id).unwrap();
     assert_eq!(invoice.id, 1);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
     assert_eq!(invoice.amount_usdc, 10_000_000);
     assert_eq!(invoice.gross_usdc, 10_250_000);
     // Issue #6: payer is None before payment
     assert_eq!(invoice.payer, OptionalAddress::None);
+    assert_eq!(invoice.payer, MaybeAddress::None);
 }
 
 #[test]
@@ -36,7 +47,14 @@ fn test_mark_paid_requires_admin() {
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
     let rogue_admin = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     assert!(client.try_mark_paid(&rogue_admin, &id, &payer).is_err());
 }
 
@@ -45,7 +63,14 @@ fn test_expired_invoice_cannot_be_paid() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &1);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &1,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     env.ledger().with_mut(|ledger| ledger.timestamp += 2);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
 }
@@ -56,7 +81,14 @@ fn test_pause_blocks_create_invoice() {
     let merchant = Address::generate(&env);
     client.pause(&admin);
     assert!(client
-        .try_create_invoice(&merchant, &10_000_000, &10_250_000, &3600)
+        .try_create_invoice(
+            &merchant,
+            &10_000_000,
+            &10_250_000,
+            &3600,
+            &MaybeBytes::None,
+            &MaybeBytes::None
+        )
         .is_err());
 }
 
@@ -65,7 +97,14 @@ fn test_pause_blocks_mark_paid() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     client.pause(&admin);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
 }
@@ -75,7 +114,14 @@ fn test_double_payment_rejected() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     client.mark_paid(&admin, &id, &payer);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
 }
@@ -106,10 +152,19 @@ fn test_payer_set_after_payment() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     client.mark_paid(&admin, &id, &payer);
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.payer, OptionalAddress::Some(payer));
+    let invoice = client.get_invoice(&id).unwrap();
+    assert_eq!(invoice.payer, MaybeAddress::Some(payer));
 }
 
 // Issue #7: expired error returned when mark_paid finds stale invoice
@@ -118,7 +173,14 @@ fn test_expired_event_emitted_on_stale_mark_paid() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &1);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &1,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     env.ledger().with_mut(|ledger| ledger.timestamp += 2);
     let err = client
         .try_mark_paid(&admin, &id, &payer)
@@ -137,7 +199,14 @@ fn test_payment_at_exact_expiry_is_rejected() {
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
     // expires_in_seconds=10, ledger starts at 0, so expires_at=10
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &10);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &10,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     env.ledger().with_mut(|ledger| ledger.timestamp = 10);
     let err = client
         .try_mark_paid(&admin, &id, &payer)
@@ -152,7 +221,14 @@ fn test_payment_before_expiry_succeeds() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &10);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &10,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
     env.ledger().with_mut(|ledger| ledger.timestamp = 9);
     client.mark_paid(&admin, &id, &payer);
     let invoice = client.get_invoice(&id);
@@ -187,7 +263,14 @@ fn test_zero_duration_invoice_rejected() {
     let (env, _admin, client) = setup();
     let merchant = Address::generate(&env);
     assert!(client
-        .try_create_invoice(&merchant, &10_000_000, &10_250_000, &0)
+        .try_create_invoice(
+            &merchant,
+            &10_000_000,
+            &10_250_000,
+            &0,
+            &MaybeBytes::None,
+            &MaybeBytes::None
+        )
         .is_err());
 }
 
@@ -199,7 +282,14 @@ fn test_expiry_overflow_rejected() {
     // Set ledger timestamp near u64::MAX so adding any duration overflows
     env.ledger().with_mut(|l| l.timestamp = u64::MAX);
     assert!(client
-        .try_create_invoice(&merchant, &10_000_000, &10_250_000, &1)
+        .try_create_invoice(
+            &merchant,
+            &10_000_000,
+            &10_250_000,
+            &1,
+            &MaybeBytes::None,
+            &MaybeBytes::None
+        )
         .is_err());
 }
 
@@ -220,7 +310,14 @@ fn test_event_stream_redis_webhook_compatibility() {
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
 
-    let invoice_id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
+    let invoice_id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
 
     // Verify the invoice can be retrieved (validates event data was properly stored)
     let invoice = client.get_invoice(&invoice_id);
@@ -236,6 +333,7 @@ fn test_event_stream_redis_webhook_compatibility() {
     let paid_invoice = client.get_invoice(&invoice_id);
     assert_eq!(paid_invoice.status, InvoiceStatus::Paid);
     assert_eq!(paid_invoice.payer, OptionalAddress::Some(payer));
+    assert_eq!(paid_invoice.payer, MaybeAddress::Some(payer));
     assert!(paid_invoice.paid_at.is_some());
 
     // Verify pause/unpause events with Address data

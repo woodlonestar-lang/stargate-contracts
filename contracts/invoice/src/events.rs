@@ -26,6 +26,23 @@ pub fn invoice_paid(env: &Env, id: u64, invoice: &Invoice) {
         .publish((Symbol::new(env, "invoice_paid"), id), invoice.clone());
 }
 
+pub fn invoice_expired(env: &Env, id: u64, invoice: &Invoice) {
+    env.events()
+        .publish((Symbol::new(env, "invoice_expired"), id), invoice.clone());
+}
+
+pub fn invoice_cancelled(env: &Env, id: u64, invoice: &Invoice) {
+    env.events()
+        .publish((Symbol::new(env, "invoice_cancelled"), id), invoice.clone());
+}
+
+pub fn invoice_refund_requested(env: &Env, id: u64, invoice: &Invoice) {
+    env.events().publish(
+        (Symbol::new(env, "invoice_refund_req"), id),
+        invoice.clone(),
+    );
+}
+
 pub fn contract_paused(env: &Env, admin: &Address) {
     env.events()
         .publish((Symbol::new(env, "contract_paused"),), admin);

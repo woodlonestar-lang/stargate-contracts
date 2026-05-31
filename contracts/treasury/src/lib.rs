@@ -176,6 +176,26 @@ impl TreasuryContract {
         );
     }
 
+    pub fn cancel_settlement(env: Env, admin: Address, settlement_id: u64) {
+        Self::require_admin(&env, &admin);
+        let mut settlement: Settlement = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Settlement(settlement_id))
+            .unwrap_or_else(|| panic!("SettlementNotFound"));
+        if settlement.status != SettlementStatus::Pending {
+            panic!("AlreadyExecuted");
+        }
+        settlement.status = SettlementStatus::Cancelled;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Settlement(settlement_id), &settlement);
+        env.events().publish(
+            (Symbol::new(&env, "settlement_cancelled"), settlement_id),
+            settlement,
+        );
+    }
+
     pub fn get_pending_settlements(env: Env) -> Vec<Settlement> {
         let count: u64 = env
             .storage()

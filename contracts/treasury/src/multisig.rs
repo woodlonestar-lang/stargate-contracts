@@ -22,6 +22,7 @@ pub enum TreasuryError {
 pub enum SettlementStatus {
     Pending,
     Executed,
+    Cancelled,
 }
 
 #[contracttype]

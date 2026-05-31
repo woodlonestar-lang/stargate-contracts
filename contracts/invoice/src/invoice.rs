@@ -1,13 +1,5 @@
 use soroban_sdk::{contracterror, contracttype, Address, Bytes};
 
-// soroban contracttype cannot store Option<Address> directly; use a tagged-union workaround
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MaybeAddress {
-    None,
-    Some(Address),
-}
-
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -50,14 +42,6 @@ pub enum MaybeBytes {
     Some(Bytes),
 }
 
-/// `Option<Address>` is not supported by `#[contracttype]`; use this enum instead.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum OptionalAddress {
-    None,
-    Some(Address),
-}
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Invoice {
@@ -68,7 +52,6 @@ pub struct Invoice {
     pub status: InvoiceStatus,
     pub expires_at: u64,
     pub paid_at: Option<u64>,
-    pub payer: OptionalAddress,
     pub payer: MaybeAddress,
     pub metadata_hash: MaybeBytes,
     pub payment_link_hash: MaybeBytes,

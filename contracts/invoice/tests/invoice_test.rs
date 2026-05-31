@@ -1,11 +1,13 @@
 use invoice::{
-    InvoiceContract, InvoiceContractClient, InvoiceError, InvoiceStatus, OptionalAddress,
     InvoiceContract, InvoiceContractClient, InvoiceError, InvoiceStatus, MaybeAddress, MaybeBytes,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env,
 };
+
+extern crate std;
+use std::{collections::HashSet, fs, path::Path};
 
 fn setup() -> (Env, Address, InvoiceContractClient<'static>) {
     let env = Env::default();
@@ -21,8 +23,6 @@ fn setup() -> (Env, Address, InvoiceContractClient<'static>) {
 fn test_create_invoice_succeeds() {
     let (env, _admin, client) = setup();
     let merchant = Address::generate(&env);
-    let id = client.create_invoice(&merchant, &10_000_000, &10_250_000, &3600);
-    let invoice = client.get_invoice(&id);
     let id = client.create_invoice(
         &merchant,
         &10_000_000,
@@ -36,8 +36,6 @@ fn test_create_invoice_succeeds() {
     assert_eq!(invoice.status, InvoiceStatus::Pending);
     assert_eq!(invoice.amount_usdc, 10_000_000);
     assert_eq!(invoice.gross_usdc, 10_250_000);
-    // Issue #6: payer is None before payment
-    assert_eq!(invoice.payer, OptionalAddress::None);
     assert_eq!(invoice.payer, MaybeAddress::None);
 }
 
@@ -126,7 +124,6 @@ fn test_double_payment_rejected() {
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
 }
 
-// Issue #5: get_invoice returns NotFound for unknown ID
 #[test]
 fn test_get_invoice_unknown_id_returns_not_found() {
     let (_env, _admin, client) = setup();
@@ -134,7 +131,6 @@ fn test_get_invoice_unknown_id_returns_not_found() {
     assert_eq!(err, InvoiceError::NotFound);
 }
 
-// Issue #5: mark_paid returns NotFound for unknown ID
 #[test]
 fn test_mark_paid_unknown_id_returns_not_found() {
     let (env, admin, client) = setup();
@@ -146,7 +142,6 @@ fn test_mark_paid_unknown_id_returns_not_found() {
     assert_eq!(err, InvoiceError::NotFound);
 }
 
-// Issue #6: payer is set to Some(payer) after payment
 #[test]
 fn test_payer_set_after_payment() {
     let (env, admin, client) = setup();
@@ -161,13 +156,10 @@ fn test_payer_set_after_payment() {
         &MaybeBytes::None,
     );
     client.mark_paid(&admin, &id, &payer);
-    let invoice = client.get_invoice(&id);
-    assert_eq!(invoice.payer, OptionalAddress::Some(payer));
     let invoice = client.get_invoice(&id).unwrap();
     assert_eq!(invoice.payer, MaybeAddress::Some(payer));
 }
 
-// Issue #7: expired error returned when mark_paid finds stale invoice
 #[test]
 fn test_expired_event_emitted_on_stale_mark_paid() {
     let (env, admin, client) = setup();
@@ -188,17 +180,18 @@ fn test_expired_event_emitted_on_stale_mark_paid() {
         .unwrap();
     assert_eq!(err, InvoiceError::Expired);
     // Storage is rolled back on error; invoice remains Pending
-    let invoice = client.get_invoice(&id);
+    let invoice = client.get_invoice(&id).unwrap();
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 }
 
-// Issue #8: payment at exactly expires_at is rejected (boundary is exclusive)
+// Payment at exactly expires_at is rejected — the boundary is exclusive.
+// expires_in_seconds=10, ledger starts at 0, so expires_at=10.
+// Setting timestamp=10 means now >= expires_at → Expired.
 #[test]
 fn test_payment_at_exact_expiry_is_rejected() {
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
-    // expires_in_seconds=10, ledger starts at 0, so expires_at=10
     let id = client.create_invoice(
         &merchant,
         &10_000_000,
@@ -215,7 +208,7 @@ fn test_payment_at_exact_expiry_is_rejected() {
     assert_eq!(err, InvoiceError::Expired);
 }
 
-// Issue #8: payment one second before expiry succeeds
+// Payment one second before expires_at succeeds — last valid moment is expires_at - 1.
 #[test]
 fn test_payment_before_expiry_succeeds() {
     let (env, admin, client) = setup();
@@ -231,11 +224,10 @@ fn test_payment_before_expiry_succeeds() {
     );
     env.ledger().with_mut(|ledger| ledger.timestamp = 9);
     client.mark_paid(&admin, &id, &payer);
-    let invoice = client.get_invoice(&id);
+    let invoice = client.get_invoice(&id).unwrap();
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 }
 
-// Issue #1: initialize requires admin auth
 #[test]
 fn test_initialize_requires_admin_auth() {
     let env = Env::default();
@@ -244,12 +236,10 @@ fn test_initialize_requires_admin_auth() {
     let id = env.register_contract(None, InvoiceContract);
     let client = InvoiceContractClient::new(&env, &id);
     client.initialize(&admin);
-    // Verify that admin auth was required during initialize
     let auths = env.auths();
     assert!(auths.iter().any(|(addr, _)| addr == &admin));
 }
 
-// Issue #2: initialize cannot be called twice
 #[test]
 fn test_initialize_cannot_be_called_twice() {
     let (env, _admin, client) = setup();
@@ -257,7 +247,6 @@ fn test_initialize_cannot_be_called_twice() {
     assert!(client.try_initialize(&new_admin).is_err());
 }
 
-// Issue #3: zero-duration invoice is rejected
 #[test]
 fn test_zero_duration_invoice_rejected() {
     let (env, _admin, client) = setup();
@@ -274,12 +263,10 @@ fn test_zero_duration_invoice_rejected() {
         .is_err());
 }
 
-// Issue #4: overflow in expires_at is rejected
 #[test]
 fn test_expiry_overflow_rejected() {
     let (env, _admin, client) = setup();
     let merchant = Address::generate(&env);
-    // Set ledger timestamp near u64::MAX so adding any duration overflows
     env.ledger().with_mut(|l| l.timestamp = u64::MAX);
     assert!(client
         .try_create_invoice(
@@ -295,17 +282,6 @@ fn test_expiry_overflow_rejected() {
 
 #[test]
 fn test_event_stream_redis_webhook_compatibility() {
-    // Validates that contract events emitted are compatible with Redis webhook delivery.
-    // Expected event schema for Redis consumer:
-    // - Event type: Symbol (serializes to string)
-    // - Topics: (Symbol, optional id/data fields)
-    // - Data: Invoice struct (fields: id, merchant, amount_usdc, gross_usdc, status, expires_at, paid_at, payer)
-    //
-    // Redis webhook delivery expects:
-    // 1. Events serializable to JSON without data loss
-    // 2. Addresses convertible to string representation
-    // 3. InvoiceStatus enum serializable as string variant
-    // 4. Numeric types (u64, i128) representable as JSON numbers/strings
     let (env, admin, client) = setup();
     let merchant = Address::generate(&env);
     let payer = Address::generate(&env);
@@ -319,28 +295,112 @@ fn test_event_stream_redis_webhook_compatibility() {
         &MaybeBytes::None,
     );
 
-    // Verify the invoice can be retrieved (validates event data was properly stored)
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.id, 1);
     assert_eq!(invoice.merchant, merchant);
     assert_eq!(invoice.amount_usdc, 10_000_000);
     assert_eq!(invoice.gross_usdc, 10_250_000);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
-    assert_eq!(invoice.payer, OptionalAddress::None);
+    assert_eq!(invoice.payer, MaybeAddress::None);
 
-    // Verify payment event data
     client.mark_paid(&admin, &invoice_id, &payer);
-    let paid_invoice = client.get_invoice(&invoice_id);
+    let paid_invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(paid_invoice.status, InvoiceStatus::Paid);
-    assert_eq!(paid_invoice.payer, OptionalAddress::Some(payer));
     assert_eq!(paid_invoice.payer, MaybeAddress::Some(payer));
     assert!(paid_invoice.paid_at.is_some());
 
-    // Verify pause/unpause events with Address data
     client.pause(&admin);
     client.unpause(&admin);
+}
 
-    // All event types tested: invoice_created, invoice_paid, contract_paused, contract_unpaused
-    // All data types represented: Symbol, u64, Address, Invoice struct, Option<u64>
-    // Verification: events are emitted with consistent, JSON-serializable payloads
+// ABI snapshot comparison: asserts abis/invoice.json stays in sync with the
+// contract's public surface. Run via `cargo test` or `make check-abi-snapshots`.
+#[test]
+fn test_abi_snapshot_matches_contract() {
+    // Canonical function and event lists derived from lib.rs / events.rs.
+    let expected_functions: HashSet<&str> = [
+        "initialize",
+        "create_invoice",
+        "mark_paid",
+        "get_invoice",
+        "get_invoice_status",
+        "cancel_invoice",
+        "request_refund",
+        "batch_expire",
+        "pause",
+        "unpause",
+    ]
+    .iter()
+    .copied()
+    .collect();
+
+    let expected_events: HashSet<&str> = [
+        "invoice_created",
+        "invoice_paid",
+        "invoice_expired",
+        "invoice_cancelled",
+        "invoice_refund_req",
+        "contract_paused",
+        "contract_unpaused",
+    ]
+    .iter()
+    .copied()
+    .collect();
+
+    // Locate abis/invoice.json relative to the workspace root (CARGO_MANIFEST_DIR
+    // points to contracts/invoice; walk up two levels).
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let abi_path = manifest_dir.join("../../abis/invoice.json");
+    let raw = fs::read_to_string(&abi_path)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", abi_path.display()));
+
+    // --- functions ---
+    let fns_block = raw
+        .split("\"functions\"")
+        .nth(1)
+        .expect("\"functions\" key missing from abis/invoice.json");
+    let fns_array = &fns_block[fns_block.find('[').unwrap()..=fns_block.find(']').unwrap()];
+    let snapshot_functions: HashSet<&str> = fns_array
+        .split('"')
+        .filter(|s| !s.trim().is_empty() && !s.contains('[') && !s.contains(']'))
+        .collect();
+
+    // --- events ---
+    let evts_block = raw
+        .split("\"events\"")
+        .nth(1)
+        .expect("\"events\" key missing from abis/invoice.json");
+    let evts_array = &evts_block[evts_block.find('[').unwrap()..=evts_block.find(']').unwrap()];
+    let snapshot_events: HashSet<&str> = evts_array
+        .split('"')
+        .filter(|s| !s.trim().is_empty() && !s.contains('[') && !s.contains(']'))
+        .collect();
+
+    assert_eq!(
+        snapshot_functions, expected_functions,
+        "abis/invoice.json functions list is out of sync with the contract.\n\
+         Missing from snapshot : {:?}\n\
+         Extra in snapshot     : {:?}\n\
+         Run `make update-abi-snapshots` to regenerate.",
+        expected_functions
+            .difference(&snapshot_functions)
+            .collect::<Vec<_>>(),
+        snapshot_functions
+            .difference(&expected_functions)
+            .collect::<Vec<_>>(),
+    );
+
+    assert_eq!(
+        snapshot_events, expected_events,
+        "abis/invoice.json events list is out of sync with the contract.\n\
+         Missing from snapshot : {:?}\n\
+         Extra in snapshot     : {:?}\n\
+         Run `make update-abi-snapshots` to regenerate.",
+        expected_events
+            .difference(&snapshot_events)
+            .collect::<Vec<_>>(),
+        snapshot_events
+            .difference(&expected_events)
+            .collect::<Vec<_>>(),
+    );
 }

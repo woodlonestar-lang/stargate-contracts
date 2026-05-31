@@ -410,6 +410,8 @@ fn admin_transfer_wrong_acceptor_panics() {
         client.accept_admin(&impostor);
     });
     assert!(result.is_err());
+}
+
 #[test]
 fn allow_address_returns_unauthorized_for_non_admin() {
     let env = Env::default();

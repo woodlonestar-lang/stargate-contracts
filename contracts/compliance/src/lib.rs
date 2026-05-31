@@ -80,27 +80,31 @@ impl ComplianceContract {
 
     /// Allow an address until a specific ledger timestamp (seconds since epoch).
     /// After expiry, `is_allowed` returns false even if the Allowed flag is set.
-    pub fn allow_address_until(env: Env, admin: Address, address: Address, expires_at: u64) {
-        Self::require_admin(&env, &admin);
-        Self::require_not_paused(&env);
+    pub fn allow_address_until(env: Env, admin: Address, address: Address, expires_at: u64) -> Result<(), ContractError> {
+        Self::require_admin(&env, &admin)?;
+        Self::require_not_paused(&env)?;
         env.storage()
             .persistent()
             .set(&DataKey::Allowed(address.clone()), &true);
         env.storage()
             .persistent()
             .set(&DataKey::AllowedUntil(address.clone()), &expires_at);
-        env.events()
-            .publish((Symbol::new(&env, "address_allowed_until"),), (address, expires_at));
+        env.events().publish(
+            (Symbol::new(&env, "address_allowed_until"),),
+            (address, expires_at),
+        );
+        Ok(())
     }
 
     /// Initiate a two-step admin transfer. The pending admin must call accept_admin.
-    pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) {
-        Self::require_admin(&env, &admin);
+    pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), ContractError> {
+        Self::require_admin(&env, &admin)?;
         env.storage()
             .instance()
             .set(&DataKey::PendingAdmin, &new_admin);
         env.events()
             .publish((Symbol::new(&env, "admin_transfer_initiated"),), new_admin);
+        Ok(())
     }
 
     /// Complete the admin transfer. Must be called by the pending admin.
@@ -120,8 +124,6 @@ impl ComplianceContract {
             .publish((Symbol::new(&env, "admin_transferred"),), new_admin);
     }
 
-    pub fn clear_address(env: Env, admin: Address, address: Address) {
-        Self::require_admin(&env, &admin);
     pub fn clear_address(env: Env, admin: Address, address: Address) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
         env.storage()

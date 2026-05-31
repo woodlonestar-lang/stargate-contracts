@@ -31,14 +31,8 @@ impl TreasuryError {
         }
     }
 }
-    DataKey, Dispute, DisputeStatus, Settlement, SettlementHoldReason, SettlementStatus,
-    TreasuryError,
-};
 
-use settlement::{require_authorized_signer, signer_weight};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Symbol, Vec};
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Symbol, Vec};
-
 
 #[contract]
 pub struct TreasuryContract;
@@ -184,7 +178,10 @@ impl TreasuryContract {
             .persistent()
             .set(&DataKey::Settlement(settlement_id), &settlement);
         env.events().publish(
-            (Symbol::new(&env, "settlement_partial_approved"), settlement_id),
+            (
+                Symbol::new(&env, "settlement_partial_approved"),
+                settlement_id,
+            ),
             settlement.clone(),
         );
         settlement
@@ -494,7 +491,10 @@ impl TreasuryContract {
             .persistent()
             .set(&DataKey::Settlement(settlement_id), &settlement);
         env.events().publish(
-            (Symbol::new(&env, "settlement_partial_executed"), settlement_id),
+            (
+                Symbol::new(&env, "settlement_partial_executed"),
+                settlement_id,
+            ),
             settlement,
         );
     }
@@ -703,6 +703,8 @@ impl TreasuryContract {
             proposal.clone(),
         );
         proposal
+    }
+
     // Issue #47: merchant payout address update workflow
     pub fn update_merchant_payout_address(
         env: Env,

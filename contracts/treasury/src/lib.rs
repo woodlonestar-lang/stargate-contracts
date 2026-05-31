@@ -119,6 +119,17 @@ impl TreasuryContract {
         id
     }
 
+    pub fn propose_partial_settlement(
+        env: Env,
+        signer: Address,
+        merchant_address: Address,
+        amount: i128,
+    ) -> u64 {
+        // Wrapper entrypoint for proposing partial settlements. Behavior currently identical to propose_settlement.
+        // Kept as a separate entrypoint to expose intent in the contract ABI without changing storage layout.
+        Self::propose_settlement(env, signer, merchant_address, amount)
+    }
+
     pub fn approve_settlement(env: Env, signer: Address, settlement_id: u64) -> Settlement {
         Self::require_not_paused(&env);
         require_authorized_signer(&env, &signer);

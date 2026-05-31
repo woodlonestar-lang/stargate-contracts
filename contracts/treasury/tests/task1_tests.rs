@@ -81,7 +81,10 @@ fn double_cancel_panics() {
 // ─── #117 Event ordering snapshots ───────────────────────────────────────────
 
 fn event_symbol(env: &Env, topics: &soroban_sdk::Vec<soroban_sdk::Val>) -> String {
-    let sym: Symbol = topics.get_unchecked(0).try_into().unwrap_or_else(|_| Symbol::new(env, ""));
+    let sym: Symbol = topics
+        .get_unchecked(0)
+        .try_into()
+        .unwrap_or_else(|_| Symbol::new(env, ""));
     sym.to_string()
 }
 
@@ -104,9 +107,18 @@ fn event_order_propose_approve_cancel() {
         .collect();
 
     // Find positions of the three key events
-    let proposed = symbols.iter().position(|s| s == "settlement_proposed").unwrap();
-    let approved = symbols.iter().position(|s| s == "settlement_approved").unwrap();
-    let cancelled = symbols.iter().position(|s| s == "settlement_cancelled").unwrap();
+    let proposed = symbols
+        .iter()
+        .position(|s| s == "settlement_proposed")
+        .unwrap();
+    let approved = symbols
+        .iter()
+        .position(|s| s == "settlement_approved")
+        .unwrap();
+    let cancelled = symbols
+        .iter()
+        .position(|s| s == "settlement_cancelled")
+        .unwrap();
 
     assert!(proposed < approved, "proposed must come before approved");
     assert!(approved < cancelled, "approved must come before cancelled");
@@ -128,8 +140,14 @@ fn event_order_propose_then_execute() {
         .map(|(_, topics, _)| event_symbol(&env, &topics))
         .collect();
 
-    let proposed = symbols.iter().position(|s| s == "settlement_proposed").unwrap();
-    let executed = symbols.iter().position(|s| s == "settlement_executed").unwrap();
+    let proposed = symbols
+        .iter()
+        .position(|s| s == "settlement_proposed")
+        .unwrap();
+    let executed = symbols
+        .iter()
+        .position(|s| s == "settlement_executed")
+        .unwrap();
 
     assert!(proposed < executed, "proposed must come before executed");
 }
@@ -226,5 +244,7 @@ fn try_execute_nonexistent_settlement_returns_err() {
     let env = Env::default();
     let (client, admin, _) = setup(&env, 1);
     let token = Address::generate(&env);
-    assert!(client.try_execute_settlement(&admin, &9999, &token).is_err());
+    assert!(client
+        .try_execute_settlement(&admin, &9999, &token)
+        .is_err());
 }

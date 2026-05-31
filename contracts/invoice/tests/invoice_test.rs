@@ -377,7 +377,8 @@ fn test_abi_snapshot_matches_contract() {
         .collect();
 
     assert_eq!(
-        snapshot_functions, expected_functions,
+        snapshot_functions,
+        expected_functions,
         "abis/invoice.json functions list is out of sync with the contract.\n\
          Missing from snapshot : {:?}\n\
          Extra in snapshot     : {:?}\n\
@@ -391,7 +392,8 @@ fn test_abi_snapshot_matches_contract() {
     );
 
     assert_eq!(
-        snapshot_events, expected_events,
+        snapshot_events,
+        expected_events,
         "abis/invoice.json events list is out of sync with the contract.\n\
          Missing from snapshot : {:?}\n\
          Extra in snapshot     : {:?}\n\

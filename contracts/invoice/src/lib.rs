@@ -4,7 +4,7 @@ mod events;
 mod invoice;
 mod validation;
 
-pub use invoice::{DataKey, Invoice, InvoiceError, InvoiceStatus};
+pub use invoice::{DataKey, Invoice, InvoiceError, InvoiceStatus, MaybeAddress};
 
 use soroban_sdk::{contract, contractimpl, Address, Env};
 use validation::{require_admin, require_not_paused, require_positive_amount};
@@ -59,7 +59,7 @@ impl InvoiceContract {
             status: InvoiceStatus::Pending,
             expires_at,
             paid_at: None,
-            payer: None,
+            payer: MaybeAddress::None,
         };
 
         env.storage()
@@ -99,7 +99,7 @@ impl InvoiceContract {
 
         invoice.status = InvoiceStatus::Paid;
         invoice.paid_at = Some(env.ledger().timestamp());
-        invoice.payer = Some(payer);
+        invoice.payer = MaybeAddress::Some(payer);
         env.storage()
             .persistent()
             .set(&DataKey::Invoice(id), &invoice);
@@ -112,6 +112,59 @@ impl InvoiceContract {
             .persistent()
             .get(&DataKey::Invoice(id))
             .ok_or(InvoiceError::NotFound)
+    }
+
+    // Issue #49: merchant or admin may cancel a pending invoice
+    pub fn cancel_invoice(env: Env, caller: Address, id: u64) -> Result<(), InvoiceError> {
+        caller.require_auth();
+        require_not_paused(&env)?;
+
+        let mut invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if caller != invoice.merchant && caller != admin {
+            return Err(InvoiceError::Unauthorized);
+        }
+        if invoice.status != InvoiceStatus::Pending {
+            return Err(InvoiceError::NotPending);
+        }
+
+        invoice.status = InvoiceStatus::Cancelled;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id), &invoice);
+        events::invoice_cancelled(&env, id, &invoice);
+        Ok(())
+    }
+
+    // Issue #50: payer may request a refund on a paid invoice (escrow dispute)
+    pub fn request_refund(env: Env, payer: Address, id: u64) -> Result<(), InvoiceError> {
+        payer.require_auth();
+        require_not_paused(&env)?;
+
+        let mut invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+
+        if invoice.status != InvoiceStatus::Paid {
+            return Err(InvoiceError::NotPaid);
+        }
+        if invoice.payer != MaybeAddress::Some(payer.clone()) {
+            return Err(InvoiceError::Unauthorized);
+        }
+
+        invoice.status = InvoiceStatus::RefundRequested;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id), &invoice);
+        events::invoice_refund_requested(&env, id, &invoice);
+        Ok(())
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<(), InvoiceError> {

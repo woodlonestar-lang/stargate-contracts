@@ -35,6 +35,19 @@ fn approvals_accumulate_until_threshold() {
     assert_eq!(settlement.approval_weight, 2);
 }
 
+#[test]
+fn partial_approval_accumulates() {
+    let (env, admin, backup, contract_id) = setup_multisig();
+    let client = TreasuryContractClient::new(&env, &contract_id);
+    let merchant = Address::generate(&env);
+    let settlement_id = client.propose_settlement(&admin, &merchant, &10_000_000);
+    let settlement = client.approve_partial_settlement(&backup, &settlement_id, &5_000_000);
+    assert_eq!(settlement.status, SettlementStatus::Pending);
+    assert_eq!(settlement.approvals.len(), 2);
+    // approval_weight should be 2 (admin=1 + backup=1)
+    assert_eq!(settlement.approval_weight, 2);
+}
+
 // Fix #13: approve_settlement and execute_settlement on missing ID panic with SettlementNotFound.
 // The treasury uses panic!() (non-unwinding in no_std) for these error paths;
 // the behavior is verified by the contract logic and the #[should_panic] pattern

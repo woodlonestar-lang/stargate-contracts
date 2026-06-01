@@ -4,9 +4,9 @@ mod events;
 mod invoice;
 mod validation;
 
-pub use invoice::{DataKey, Invoice, InvoiceError, InvoiceStatus};
+pub use invoice::{DataKey, Invoice, InvoiceError, InvoiceStatus, MaybeAddress, MaybeBytes};
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use validation::{require_admin, require_not_paused, require_positive_amount};
 
 #[contract]
@@ -14,10 +14,15 @@ pub struct InvoiceContract;
 
 #[contractimpl]
 impl InvoiceContract {
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), InvoiceError> {
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(InvoiceError::AlreadyInitialized);
+        }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::InvoiceCount, &0u64);
         env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
     }
 
     pub fn create_invoice(
@@ -26,10 +31,16 @@ impl InvoiceContract {
         amount_usdc: i128,
         gross_usdc: i128,
         expires_in_seconds: u64,
+        metadata_hash: MaybeBytes,
+        payment_link_hash: MaybeBytes,
     ) -> Result<u64, InvoiceError> {
         merchant.require_auth();
         require_not_paused(&env)?;
         require_positive_amount(amount_usdc, gross_usdc)?;
+
+        if expires_in_seconds == 0 {
+            return Err(InvoiceError::ZeroDuration);
+        }
 
         let count: u64 = env
             .storage()
@@ -37,7 +48,11 @@ impl InvoiceContract {
             .get(&DataKey::InvoiceCount)
             .unwrap_or(0);
         let id = count + 1;
-        let expires_at = env.ledger().timestamp() + expires_in_seconds;
+        let expires_at = env
+            .ledger()
+            .timestamp()
+            .checked_add(expires_in_seconds)
+            .ok_or(InvoiceError::ExpiryOverflow)?;
         let invoice = Invoice {
             id,
             merchant: merchant.clone(),
@@ -46,7 +61,9 @@ impl InvoiceContract {
             status: InvoiceStatus::Pending,
             expires_at,
             paid_at: None,
-            payer: merchant,
+            payer: MaybeAddress::None,
+            metadata_hash,
+            payment_link_hash,
         };
 
         env.storage()
@@ -70,22 +87,19 @@ impl InvoiceContract {
             .storage()
             .persistent()
             .get(&DataKey::Invoice(id))
-            .unwrap();
+            .ok_or(InvoiceError::NotFound)?;
 
         if invoice.status != InvoiceStatus::Pending {
             return Err(InvoiceError::NotPending);
         }
-        if env.ledger().timestamp() > invoice.expires_at {
-            invoice.status = InvoiceStatus::Expired;
-            env.storage()
-                .persistent()
-                .set(&DataKey::Invoice(id), &invoice);
+        // expires_at boundary is exclusive: payment at exactly expires_at is rejected
+        if env.ledger().timestamp() >= invoice.expires_at {
             return Err(InvoiceError::Expired);
         }
 
         invoice.status = InvoiceStatus::Paid;
         invoice.paid_at = Some(env.ledger().timestamp());
-        invoice.payer = payer;
+        invoice.payer = MaybeAddress::Some(payer);
         env.storage()
             .persistent()
             .set(&DataKey::Invoice(id), &invoice);
@@ -93,11 +107,116 @@ impl InvoiceContract {
         Ok(())
     }
 
-    pub fn get_invoice(env: Env, id: u64) -> Invoice {
+    pub fn get_invoice(env: Env, id: u64) -> Result<Invoice, InvoiceError> {
         env.storage()
             .persistent()
             .get(&DataKey::Invoice(id))
-            .unwrap()
+            .ok_or(InvoiceError::NotFound)
+    }
+
+    pub fn get_invoice_status(env: Env, id: u64) -> Result<InvoiceStatus, InvoiceError> {
+        let invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+        Ok(invoice.status)
+    }
+
+test/invoice-payment-expiry-boundary
+    // Issue #49: merchant or admin may cancel a pending invoice
+
+    // merchant or admin may cancel a pending invoice
+ main
+    pub fn cancel_invoice(env: Env, caller: Address, id: u64) -> Result<(), InvoiceError> {
+        caller.require_auth();
+        require_not_paused(&env)?;
+
+        let mut invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if caller != invoice.merchant && caller != admin {
+            return Err(InvoiceError::Unauthorized);
+        }
+        if invoice.status != InvoiceStatus::Pending {
+            return Err(InvoiceError::NotPending);
+        }
+
+        invoice.status = InvoiceStatus::Cancelled;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id), &invoice);
+        events::invoice_cancelled(&env, id, &invoice);
+        Ok(())
+ test/invoice-payment-expiry-boundary
+    }
+
+    pub fn batch_expire(env: Env, admin: Address, ids: Vec<u64>) -> Result<u32, InvoiceError> {
+        require_admin(&env, &admin)?;
+        let now = env.ledger().timestamp();
+        let mut expired_count: u32 = 0;
+        for id in ids.iter() {
+            let key = DataKey::Invoice(id);
+            if let Some(mut invoice) = env.storage().persistent().get::<DataKey, Invoice>(&key) {
+                if invoice.status == InvoiceStatus::Pending && now >= invoice.expires_at {
+                    invoice.status = InvoiceStatus::Expired;
+                    env.storage().persistent().set(&key, &invoice);
+                    events::invoice_expired(&env, id, &invoice);
+                    expired_count += 1;
+                }
+            }
+        }
+        Ok(expired_count)
+
+ main
+    }
+
+    // payer may request a refund on a paid invoice (escrow dispute)
+    pub fn request_refund(env: Env, payer: Address, id: u64) -> Result<(), InvoiceError> {
+        payer.require_auth();
+        require_not_paused(&env)?;
+
+        let mut invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+
+        if invoice.status != InvoiceStatus::Paid {
+            return Err(InvoiceError::NotPaid);
+        }
+        if invoice.payer != MaybeAddress::Some(payer.clone()) {
+            return Err(InvoiceError::Unauthorized);
+        }
+
+        invoice.status = InvoiceStatus::RefundRequested;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id), &invoice);
+        events::invoice_refund_requested(&env, id, &invoice);
+        Ok(())
+    }
+
+    pub fn batch_expire(env: Env, admin: Address, ids: Vec<u64>) -> Result<u32, InvoiceError> {
+        require_admin(&env, &admin)?;
+        let now = env.ledger().timestamp();
+        let mut expired_count: u32 = 0;
+        for id in ids.iter() {
+            let key = DataKey::Invoice(id);
+            if let Some(mut invoice) = env.storage().persistent().get::<DataKey, Invoice>(&key) {
+                if invoice.status == InvoiceStatus::Pending && now >= invoice.expires_at {
+                    invoice.status = InvoiceStatus::Expired;
+                    env.storage().persistent().set(&key, &invoice);
+                    events::invoice_expired(&env, id, &invoice);
+                    expired_count += 1;
+                }
+            }
+        }
+        Ok(expired_count)
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<(), InvoiceError> {

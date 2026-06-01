@@ -1,4 +1,4 @@
-use crate::multisig::{DataKey, Settlement};
+use crate::multisig::DataKey;
 use soroban_sdk::{Address, Env};
 
 pub fn signer_weight(env: &Env, signer: &Address) -> u32 {
@@ -6,14 +6,6 @@ pub fn signer_weight(env: &Env, signer: &Address) -> u32 {
         .instance()
         .get(&DataKey::Signer(signer.clone()))
         .unwrap_or(0)
-}
-
-pub fn approval_weight(env: &Env, settlement: &Settlement) -> u32 {
-    let mut total = 0;
-    for signer in settlement.approvals.iter() {
-        total += signer_weight(env, &signer);
-    }
-    total
 }
 
 pub fn require_authorized_signer(env: &Env, signer: &Address) {

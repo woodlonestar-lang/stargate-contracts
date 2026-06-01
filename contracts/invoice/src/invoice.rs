@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address};
+use soroban_sdk::{contracterror, contracttype, Address, Bytes};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -9,6 +9,11 @@ pub enum InvoiceError {
     InvalidAmount = 3,
     NotPending = 4,
     Expired = 5,
+    NotFound = 6,
+    AlreadyInitialized = 7,
+    ZeroDuration = 8,
+    ExpiryOverflow = 9,
+    NotPaid = 10,
 }
 
 #[contracttype]
@@ -18,6 +23,23 @@ pub enum InvoiceStatus {
     Paid,
     Expired,
     Cancelled,
+    RefundRequested,
+}
+
+// contracttype enum wrappers for optional complex types; Option<Address> and
+// Option<Bytes> are not supported by the contracttype macro in soroban-sdk v20.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MaybeAddress {
+    None,
+    Some(Address),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MaybeBytes {
+    None,
+    Some(Bytes),
 }
 
 #[contracttype]
@@ -30,7 +52,9 @@ pub struct Invoice {
     pub status: InvoiceStatus,
     pub expires_at: u64,
     pub paid_at: Option<u64>,
-    pub payer: Address,
+    pub payer: MaybeAddress,
+    pub metadata_hash: MaybeBytes,
+    pub payment_link_hash: MaybeBytes,
 }
 
 #[contracttype]

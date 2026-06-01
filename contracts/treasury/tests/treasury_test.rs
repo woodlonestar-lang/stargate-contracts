@@ -1,5 +1,5 @@
 use soroban_sdk::{testutils::Address as _, Address, Env};
-use treasury::{TreasuryContract, TreasuryContractClient, SettlementStatus};
+use treasury::{SettlementStatus, TreasuryContract, TreasuryContractClient};
 
 #[test]
 fn approvals_accumulate_until_threshold() {

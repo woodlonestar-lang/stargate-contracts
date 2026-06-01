@@ -16,7 +16,9 @@ impl TreasuryContract {
     pub fn initialize(env: Env, admin: Address, threshold: u32) {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
         env.storage()
             .instance()
             .set(&DataKey::SettlementCount, &0u64);
@@ -67,9 +69,7 @@ impl TreasuryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Settlement(id), &settlement);
-        env.storage()
-            .instance()
-            .set(&DataKey::SettlementCount, &id);
+        env.storage().instance().set(&DataKey::SettlementCount, &id);
         env.events()
             .publish((Symbol::new(&env, "settlement_proposed"), id), settlement);
         id
@@ -167,7 +167,11 @@ impl TreasuryContract {
     }
 
     fn require_not_paused(env: &Env) {
-        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if paused {
             panic!("ContractPaused");
         }

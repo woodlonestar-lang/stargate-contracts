@@ -49,6 +49,20 @@
                 },
                 {
                   "u64": 10
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "None"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "None"
+                    }
+                  ]
                 }
               ]
             }
@@ -245,6 +259,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "metadata_hash"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "paid_at"
                       },
                       "val": {
@@ -262,6 +288,18 @@
                           },
                           {
                             "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "payment_link_hash"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "None"
                           }
                         ]
                       }
@@ -497,6 +535,20 @@
                 },
                 {
                   "u64": 10
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "None"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "None"
+                    }
+                  ]
                 }
               ]
             }
@@ -570,6 +622,18 @@
                 },
                 {
                   "key": {
+                    "symbol": "metadata_hash"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "paid_at"
                   },
                   "val": "void"
@@ -577,6 +641,18 @@
                 {
                   "key": {
                     "symbol": "payer"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "payment_link_hash"
                   },
                   "val": {
                     "vec": [
@@ -729,6 +805,18 @@
                 },
                 {
                   "key": {
+                    "symbol": "metadata_hash"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "paid_at"
                   },
                   "val": {
@@ -746,6 +834,18 @@
                       },
                       {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "payment_link_hash"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
                       }
                     ]
                   }
@@ -881,6 +981,18 @@
                 },
                 {
                   "key": {
+                    "symbol": "metadata_hash"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "paid_at"
                   },
                   "val": {
@@ -898,6 +1010,18 @@
                       },
                       {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "payment_link_hash"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "symbol": "None"
                       }
                     ]
                   }

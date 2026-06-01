@@ -365,6 +365,8 @@ fn test_abi_snapshot_matches_contract() {
         .filter(|s| {
             !s.trim().is_empty()
                 && !s.contains('[')
+                && !s.contains(']')
+                && !s.trim().starts_with(',')
                 && !s.trim().starts_with(',')
                 && !s.contains(']')
         })
@@ -381,6 +383,8 @@ fn test_abi_snapshot_matches_contract() {
         .filter(|s| {
             !s.trim().is_empty()
                 && !s.contains('[')
+                && !s.contains(']')
+                && !s.trim().starts_with(',')
                 && !s.trim().starts_with(',')
                 && !s.contains(']')
         })
@@ -417,6 +421,15 @@ fn test_abi_snapshot_matches_contract() {
     );
 }
 
+// Issue #94: create_invoice must enforce merchant authorization.
+// Uses cancel_invoice (which has an explicit Unauthorized check) to prove that a
+// non-merchant/non-admin caller is rejected. Also verifies that the merchant's auth
+// was recorded by create_invoice, confirming require_auth() is enforced.
+#[test]
+fn test_create_invoice_unauthorized_merchant() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let unauthorized = Address::generate(&env);
 // Issue #92: e2e flow — create invoice, advance ledger past deadline, run batch_expire, assert Expired
 #[test]
 fn test_invoice_create_to_expired_flow() {
@@ -438,6 +451,22 @@ fn test_invoice_create_to_paid_escrow_flow() {
         &MaybeBytes::None,
     );
 
+    // Confirm create_invoice required merchant authorization
+    let auths = env.auths();
+    assert!(
+        auths.iter().any(|(addr, _)| addr == &merchant),
+        "create_invoice must require merchant authorization"
+    );
+
+    // An unauthorized address is rejected when attempting to manage the invoice
+    let err = client
+        .try_cancel_invoice(&unauthorized, &id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        InvoiceError::Unauthorized,
+        "Expected Unauthorized for non-merchant non-admin caller"
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 

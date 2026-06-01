@@ -137,8 +137,32 @@ impl InvoiceContract {
         Ok(())
     }
 
-    pub fn get_invoice(env: Env, id: u64) -> Result<Invoice, InvoiceError> {
+    // --- #56: escrow release entrypoint ---
+
+    /// Release escrow for a paid invoice. Admin-only. Transitions Paid → Released.
+    pub fn release_escrow(env: Env, admin: Address, id: u64) -> Result<(), InvoiceError> {
+        require_admin(&env, &admin)?;
+        require_not_paused(&env)?;
+
+        let mut invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+
+        if invoice.status != InvoiceStatus::Paid {
+            return Err(InvoiceError::NotPaid);
+        }
+
+        invoice.status = InvoiceStatus::Released;
         env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id), &invoice);
+        events::escrow_released(&env, id, &invoice);
+        Ok(())
+    }
+
+    pub fn get_invoice(env: Env, id: u64) -> Result<Invoice, InvoiceError> {        env.storage()
             .persistent()
             .get(&DataKey::Invoice(id))
             .ok_or(InvoiceError::NotFound)

@@ -14,6 +14,8 @@ pub enum InvoiceError {
     ZeroDuration = 8,
     ExpiryOverflow = 9,
     NotPaid = 10,
+    /// Invoice has not been released from escrow.
+    NotReleased = 11,
 }
 
 #[contracttype]
@@ -24,6 +26,8 @@ pub enum InvoiceStatus {
     Expired,
     Cancelled,
     RefundRequested,
+    /// Escrow funds have been released to the merchant after payment confirmation.
+    Released,
 }
 
 // contracttype enum wrappers for optional complex types; Option<Address> and

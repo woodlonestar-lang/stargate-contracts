@@ -13,7 +13,8 @@
     "pause",
     "unpause",
     "set_grace_window",
-    "get_grace_window"
+    "get_grace_window",
+    "release_escrow"
   ],
-  "events": ["invoice_created", "invoice_paid", "invoice_expired", "invoice_cancelled", "invoice_refund_req", "contract_paused", "contract_unpaused"]
+  "events": ["invoice_created", "invoice_paid", "invoice_expired", "invoice_cancelled", "invoice_refund_req", "escrow_released", "contract_paused", "contract_unpaused"]
 }

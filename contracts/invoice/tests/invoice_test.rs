@@ -365,6 +365,63 @@ fn test_set_grace_window_requires_admin() {
     assert!(client.try_set_grace_window(&rogue, &60).is_err());
 }
 
+// --- #56: escrow release tests ---
+
+#[test]
+fn test_release_escrow_transitions_paid_to_released() {
+    let (env, admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let payer = Address::generate(&env);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
+    client.mark_paid(&admin, &id, &payer);
+    client.release_escrow(&admin, &id);
+    assert_eq!(client.get_invoice(&id).status, InvoiceStatus::Released);
+}
+
+#[test]
+fn test_release_escrow_requires_paid_status() {
+    let (env, admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
+    let err = client
+        .try_release_escrow(&admin, &id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, InvoiceError::NotPaid);
+}
+
+#[test]
+fn test_release_escrow_requires_admin() {
+    let (env, admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let payer = Address::generate(&env);
+    let rogue = Address::generate(&env);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
+    client.mark_paid(&admin, &id, &payer);
+    assert!(client.try_release_escrow(&rogue, &id).is_err());
+}
+
 // ABI snapshot comparison
 #[test]
 fn test_abi_snapshot_matches_contract() {
@@ -381,6 +438,7 @@ fn test_abi_snapshot_matches_contract() {
         "unpause",
         "set_grace_window",
         "get_grace_window",
+        "release_escrow",
     ]
     .iter()
     .copied()
@@ -392,6 +450,7 @@ fn test_abi_snapshot_matches_contract() {
         "invoice_expired",
         "invoice_cancelled",
         "invoice_refund_req",
+        "escrow_released",
         "contract_paused",
         "contract_unpaused",
     ]

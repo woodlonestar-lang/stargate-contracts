@@ -31,7 +31,7 @@ fn test_create_invoice_succeeds() {
         &MaybeBytes::None,
         &MaybeBytes::None,
     );
-    let invoice = client.get_invoice(&id).unwrap();
+    let invoice = client.get_invoice(&id);
     assert_eq!(invoice.id, 1);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
     assert_eq!(invoice.amount_usdc, 10_000_000);
@@ -156,7 +156,7 @@ fn test_payer_set_after_payment() {
         &MaybeBytes::None,
     );
     client.mark_paid(&admin, &id, &payer);
-    let invoice = client.get_invoice(&id).unwrap();
+    let invoice = client.get_invoice(&id);
     assert_eq!(invoice.payer, MaybeAddress::Some(payer));
 }
 
@@ -180,7 +180,7 @@ fn test_expired_event_emitted_on_stale_mark_paid() {
         .unwrap();
     assert_eq!(err, InvoiceError::Expired);
     // Storage is rolled back on error; invoice remains Pending
-    let invoice = client.get_invoice(&id).unwrap();
+    let invoice = client.get_invoice(&id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 }
 
@@ -224,7 +224,7 @@ fn test_payment_before_expiry_succeeds() {
     );
     env.ledger().with_mut(|ledger| ledger.timestamp = 9);
     client.mark_paid(&admin, &id, &payer);
-    let invoice = client.get_invoice(&id).unwrap();
+    let invoice = client.get_invoice(&id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 }
 
@@ -295,7 +295,7 @@ fn test_event_stream_redis_webhook_compatibility() {
         &MaybeBytes::None,
     );
 
-    let invoice = client.get_invoice(&invoice_id).unwrap();
+    let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.id, 1);
     assert_eq!(invoice.merchant, merchant);
     assert_eq!(invoice.amount_usdc, 10_000_000);
@@ -304,7 +304,7 @@ fn test_event_stream_redis_webhook_compatibility() {
     assert_eq!(invoice.payer, MaybeAddress::None);
 
     client.mark_paid(&admin, &invoice_id, &payer);
-    let paid_invoice = client.get_invoice(&invoice_id).unwrap();
+    let paid_invoice = client.get_invoice(&invoice_id);
     assert_eq!(paid_invoice.status, InvoiceStatus::Paid);
     assert_eq!(paid_invoice.payer, MaybeAddress::Some(payer));
     assert!(paid_invoice.paid_at.is_some());
@@ -362,7 +362,12 @@ fn test_abi_snapshot_matches_contract() {
     let fns_array = &fns_block[fns_block.find('[').unwrap()..=fns_block.find(']').unwrap()];
     let snapshot_functions: HashSet<&str> = fns_array
         .split('"')
-        .filter(|s| !s.trim().is_empty() && !s.contains('[') && !s.contains(']'))
+        .filter(|s| {
+            !s.trim().is_empty()
+                && !s.contains('[')
+                && !s.trim().starts_with(',')
+                && !s.contains(']')
+        })
         .collect();
 
     // --- events ---
@@ -373,7 +378,12 @@ fn test_abi_snapshot_matches_contract() {
     let evts_array = &evts_block[evts_block.find('[').unwrap()..=evts_block.find(']').unwrap()];
     let snapshot_events: HashSet<&str> = evts_array
         .split('"')
-        .filter(|s| !s.trim().is_empty() && !s.contains('[') && !s.contains(']'))
+        .filter(|s| {
+            !s.trim().is_empty()
+                && !s.contains('[')
+                && !s.trim().starts_with(',')
+                && !s.contains(']')
+        })
         .collect();
 
     assert_eq!(
@@ -404,5 +414,37 @@ fn test_abi_snapshot_matches_contract() {
         snapshot_events
             .difference(&expected_events)
             .collect::<Vec<_>>(),
+    );
+}
+
+// Issue #91: e2e happy path — create invoice, admin marks paid, assert Paid status and payer recorded
+#[test]
+fn test_invoice_create_to_paid_escrow_flow() {
+    let (env, admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let payer = Address::generate(&env);
+
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
+
+    let invoice = client.get_invoice(&id);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+    assert_eq!(invoice.merchant, merchant);
+
+    // admin marks the invoice as paid, recording the payer
+    client.mark_paid(&admin, &id, &payer);
+
+    let paid = client.get_invoice(&id);
+    assert_eq!(paid.status, InvoiceStatus::Paid);
+    assert_eq!(paid.payer, MaybeAddress::Some(payer));
+    assert!(
+        paid.paid_at.is_some(),
+        "paid_at must be set after mark_paid"
     );
 }

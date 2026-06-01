@@ -16,7 +16,9 @@ impl TreasuryContract {
     pub fn initialize(env: Env, admin: Address, threshold: u32) {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
         env.storage()
             .instance()
             .set(&DataKey::SettlementCount, &0u64);
@@ -67,9 +69,7 @@ impl TreasuryContract {
         env.storage()
             .persistent()
             .set(&DataKey::Settlement(id), &settlement);
-        env.storage()
-            .instance()
-            .set(&DataKey::SettlementCount, &id);
+        env.storage().instance().set(&DataKey::SettlementCount, &id);
         env.events()
             .publish((Symbol::new(&env, "settlement_proposed"), id), settlement);
         id
@@ -148,6 +148,35 @@ impl TreasuryContract {
         pending
     }
 
+    pub fn get_pending_settlements_page(env: Env, start: u64, limit: u64) -> Vec<Settlement> {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SettlementCount)
+            .unwrap_or(0);
+        let mut page = Vec::new(&env);
+        let mut skipped: u64 = 0;
+        let mut id = 1u64;
+        while id <= count {
+            let settlement: Settlement = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Settlement(id))
+                .unwrap();
+            if settlement.status == SettlementStatus::Pending {
+                if skipped < start {
+                    skipped += 1;
+                } else if (page.len() as u64) < limit {
+                    page.push_back(settlement);
+                } else {
+                    break;
+                }
+            }
+            id += 1;
+        }
+        page
+    }
+
     pub fn pause(env: Env, admin: Address) {
         Self::require_admin(&env, &admin);
         env.storage().instance().set(&DataKey::Paused, &true);
@@ -167,7 +196,11 @@ impl TreasuryContract {
     }
 
     fn require_not_paused(env: &Env) {
-        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if paused {
             panic!("ContractPaused");
         }

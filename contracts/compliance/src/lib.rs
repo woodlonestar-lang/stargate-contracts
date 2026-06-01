@@ -82,7 +82,11 @@ impl ComplianceContract {
     }
 
     fn require_not_paused(env: &Env) {
-        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if paused {
             panic!("ContractPaused");
         }

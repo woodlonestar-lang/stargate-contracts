@@ -25,8 +25,12 @@ deploy:
 snapshot:
     @./scripts/generate_abi_metadata.sh abis
 
+# Check dependencies for vulnerabilities and license issues
+deny:
+    cargo deny check
+
 # Run format and lint checks (for CI)
-check: fmt lint test
+check: fmt lint test deny
     @echo "✓ All checks passed"
 
 # Default target

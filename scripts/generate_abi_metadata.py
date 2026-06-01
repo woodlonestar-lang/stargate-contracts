@@ -76,13 +76,33 @@ def format_treasury(payload: dict) -> str:
     )
 
 
+def compliance_errors(crate_dir: str) -> dict[str, str]:
+    lib = ROOT / "contracts" / crate_dir / "src" / "lib.rs"
+    text = lib.read_text(encoding="utf-8")
+    # Match lines like:  ErrorVariant = N,
+    matches = re.findall(r"^\s+([A-Za-z][A-Za-z0-9]+)\s*=\s*(\d+)\s*,", text, re.MULTILINE)
+    # Only keep entries that appear inside the contracterror enum block
+    enum_match = re.search(r"#\[contracterror\].*?pub enum ContractError \{([^}]+)\}", text, re.DOTALL)
+    if not enum_match:
+        return {}
+    enum_body = enum_match.group(1)
+    return {
+        num: name
+        for name, num in re.findall(r"([A-Za-z][A-Za-z0-9]+)\s*=\s*(\d+)", enum_body)
+    }
+
+
 def format_compliance(payload: dict) -> str:
     functions = ",\n    ".join(f'"{name}"' for name in payload["functions"])
+    errors_items = ",\n    ".join(
+        f'"{k}": "{v}"' for k, v in sorted(payload["errors"].items(), key=lambda x: int(x[0]))
+    )
     return (
         "{\n"
         f'  "contract": "{payload["contract"]}",\n'
         f'  "version": "{payload["version"]}",\n'
-        f'  "functions": [\n    {functions}\n  ]\n'
+        f'  "functions": [\n    {functions}\n  ],\n'
+        f'  "errors": {{\n    {errors_items}\n  }}\n'
         "}\n"
     )
 
@@ -111,6 +131,7 @@ def main() -> None:
         "contract": "compliance",
         "version": package_version("compliance"),
         "functions": contract_public_functions("compliance"),
+        "errors": compliance_errors("compliance"),
     }
     (out_dir / "compliance.json").write_text(format_compliance(compliance), encoding="utf-8")
 

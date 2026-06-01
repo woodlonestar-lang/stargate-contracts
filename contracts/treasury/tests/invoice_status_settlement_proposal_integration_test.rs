@@ -1,4 +1,4 @@
-use invoice::{InvoiceContract, InvoiceContractClient, InvoiceStatus};
+use invoice::{InvoiceContract, InvoiceContractClient, InvoiceError, InvoiceStatus};
 use soroban_sdk::{
     contract, contracterror, contractimpl,
     testutils::{Address as _, Ledger},
@@ -119,10 +119,19 @@ fn settlement_proposal_boundary_at_expiry_transition() {
         .unwrap();
     let inv = invoice.get_invoice(&inv_id);
 
-    // Boundary: at exact expiry timestamp, invoice can still be paid (transition Pending -> Paid).
+    // Boundary: at exact expiry timestamp, invoice is expired (>= check).
     env.ledger().with_mut(|l| l.timestamp = inv.expires_at);
     assert_eq!(invoice.get_invoice(&inv_id).status, InvoiceStatus::Pending);
     let wf = SettlementProposalWorkflowClient::new(&env, &wf_id);
+    // mark_paid at exact expiry returns Expired
+    let err = invoice
+        .try_mark_paid(&admin, &inv_id, &payer)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, invoice::InvoiceError::Expired);
+
+    // Advance past expiry and pay to transition to Paid, then verify proposal is rejected.
+    env.ledger().with_mut(|l| l.timestamp = 0);
     assert!(invoice
         .try_mark_paid(&admin, &inv_id, &payer)
         .unwrap()

@@ -234,6 +234,11 @@ impl TreasuryContract {
         }
         let treasury = env.current_contract_address();
         let token_client = token::Client::new(&env, &token_contract);
+        // Transfer is invoked as an external contract call. If the token contract traps or the
+        // transfer fails at the host level, the host will abort the transaction and none of the
+        // state updates below (including marking the settlement Executed) will persist. To make
+        // failure semantics explicit, callers are expected to observe that execute_settlement
+        // panics on transfer failure (exposing a host-level error). This keeps the ABI unchanged.
         token_client.transfer(&treasury, &settlement.merchant_address, &settlement.amount);
         settlement.status = SettlementStatus::Executed;
         env.storage()
@@ -485,6 +490,11 @@ impl TreasuryContract {
         }
         let treasury = env.current_contract_address();
         let token_client = token::Client::new(&env, &token_contract);
+        // Transfer is invoked as an external contract call. If the token contract traps or the
+        // transfer fails at the host level, the host will abort the transaction and none of the
+        // state updates below (including marking the settlement PartiallyExecuted) will persist.
+        // This makes transfer failures explicit and prevents incorrectly marking settlements
+        // as executed when a token transfer did not succeed.
         token_client.transfer(&treasury, &settlement.merchant_address, &partial_amount);
         settlement.status = SettlementStatus::PartiallyExecuted;
         env.storage()

@@ -365,6 +365,62 @@ fn test_set_grace_window_requires_admin() {
     assert!(client.try_set_grace_window(&rogue, &60).is_err());
 }
 
+// --- #57: USDC decimal precision tests ---
+
+#[test]
+fn test_sub_usdc_amount_rejected() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    // 500_000 stroops = 0.05 USDC — below the 1 USDC minimum
+    let err = client
+        .try_create_invoice(
+            &merchant,
+            &500_000,
+            &10_000_000,
+            &3600,
+            &MaybeBytes::None,
+            &MaybeBytes::None,
+        )
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, InvoiceError::AmountPrecision);
+}
+
+#[test]
+fn test_sub_usdc_gross_rejected() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    // amount and gross both below 1 USDC minimum
+    let err = client
+        .try_create_invoice(
+            &merchant,
+            &500_000,
+            &500_000,
+            &3600,
+            &MaybeBytes::None,
+            &MaybeBytes::None,
+        )
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, InvoiceError::AmountPrecision);
+}
+
+#[test]
+fn test_whole_usdc_amounts_accepted() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    // 10_000_000 = 1 USDC, 10_250_000 = 1.025 USDC — both at or above minimum
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+    );
+    assert_eq!(id, 1);
+}
+
 // --- #56: escrow release tests ---
 
 #[test]

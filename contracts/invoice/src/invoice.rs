@@ -1,5 +1,8 @@
 use soroban_sdk::{contracterror, contracttype, Address, Bytes};
 
+/// USDC on Stellar uses 7 decimal places: 1 USDC = 10_000_000 stroops.
+pub const USDC_FACTOR: i128 = 10_000_000;
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -16,6 +19,8 @@ pub enum InvoiceError {
     NotPaid = 10,
     /// Invoice has not been released from escrow.
     NotReleased = 11,
+    /// Amount is below the minimum USDC unit (must be >= USDC_FACTOR stroops).
+    AmountPrecision = 12,
 }
 
 #[contracttype]

@@ -7,7 +7,9 @@ mod validation;
 pub use invoice::{DataKey, Invoice, InvoiceError, InvoiceStatus, MaybeAddress, MaybeBytes};
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
-use validation::{require_admin, require_not_paused, require_positive_amount};
+use validation::{
+    require_admin, require_not_paused, require_positive_amount, require_usdc_precision,
+};
 
 #[contract]
 pub struct InvoiceContract;
@@ -57,6 +59,8 @@ impl InvoiceContract {
         merchant.require_auth();
         require_not_paused(&env)?;
         require_positive_amount(amount_usdc, gross_usdc)?;
+        // #57: USDC decimal precision guardrail
+        require_usdc_precision(amount_usdc, gross_usdc)?;
 
         if expires_in_seconds == 0 {
             return Err(InvoiceError::ZeroDuration);

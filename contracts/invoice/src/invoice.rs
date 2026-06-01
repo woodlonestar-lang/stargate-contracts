@@ -64,4 +64,6 @@ pub enum DataKey {
     InvoiceCount,
     Admin,
     Paused,
+    /// Configurable grace window (seconds) added to expires_at during mark_paid.
+    GraceWindow,
 }

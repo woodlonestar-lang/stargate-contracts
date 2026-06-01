@@ -25,6 +25,26 @@ impl InvoiceContract {
         Ok(())
     }
 
+    // --- #55: configurable grace window ---
+
+    /// Set the grace window (seconds) added to expires_at when checking payment validity.
+    /// Allows a short buffer after quote expiry for in-flight payments.
+    pub fn set_grace_window(env: Env, admin: Address, seconds: u64) -> Result<(), InvoiceError> {
+        require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::GraceWindow, &seconds);
+        Ok(())
+    }
+
+    /// Return the current grace window in seconds (0 if not set).
+    pub fn get_grace_window(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::GraceWindow)
+            .unwrap_or(0u64)
+    }
+
     pub fn create_invoice(
         env: Env,
         merchant: Address,
@@ -92,8 +112,18 @@ impl InvoiceContract {
         if invoice.status != InvoiceStatus::Pending {
             return Err(InvoiceError::NotPending);
         }
-        // expires_at boundary is exclusive: payment at exactly expires_at is rejected
-        if env.ledger().timestamp() >= invoice.expires_at {
+
+        // #55: apply grace window — payment is valid up to expires_at + grace_window
+        let grace: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::GraceWindow)
+            .unwrap_or(0u64);
+        let effective_deadline = invoice
+            .expires_at
+            .checked_add(grace)
+            .unwrap_or(invoice.expires_at);
+        if env.ledger().timestamp() >= effective_deadline {
             return Err(InvoiceError::Expired);
         }
 
@@ -123,11 +153,7 @@ impl InvoiceContract {
         Ok(invoice.status)
     }
 
-test/invoice-payment-expiry-boundary
-    // Issue #49: merchant or admin may cancel a pending invoice
-
     // merchant or admin may cancel a pending invoice
- main
     pub fn cancel_invoice(env: Env, caller: Address, id: u64) -> Result<(), InvoiceError> {
         caller.require_auth();
         require_not_paused(&env)?;
@@ -152,27 +178,6 @@ test/invoice-payment-expiry-boundary
             .set(&DataKey::Invoice(id), &invoice);
         events::invoice_cancelled(&env, id, &invoice);
         Ok(())
- test/invoice-payment-expiry-boundary
-    }
-
-    pub fn batch_expire(env: Env, admin: Address, ids: Vec<u64>) -> Result<u32, InvoiceError> {
-        require_admin(&env, &admin)?;
-        let now = env.ledger().timestamp();
-        let mut expired_count: u32 = 0;
-        for id in ids.iter() {
-            let key = DataKey::Invoice(id);
-            if let Some(mut invoice) = env.storage().persistent().get::<DataKey, Invoice>(&key) {
-                if invoice.status == InvoiceStatus::Pending && now >= invoice.expires_at {
-                    invoice.status = InvoiceStatus::Expired;
-                    env.storage().persistent().set(&key, &invoice);
-                    events::invoice_expired(&env, id, &invoice);
-                    expired_count += 1;
-                }
-            }
-        }
-        Ok(expired_count)
-
- main
     }
 
     // payer may request a refund on a paid invoice (escrow dispute)

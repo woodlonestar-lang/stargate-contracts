@@ -18,3 +18,5 @@ soroban-sdk.workspace = true
 [dev-dependencies]
 derive_arbitrary.workspace = true
 soroban-sdk.workspace = true
+compliance = { package = "stargate-compliance", path = "../compliance" }
+invoice = { package = "stargate-invoice", path = "../invoice" }

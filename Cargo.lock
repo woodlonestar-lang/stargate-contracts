@@ -1219,6 +1219,8 @@ version = "1.0.0"
 dependencies = [
  "derive_arbitrary",
  "soroban-sdk",
+ "stargate-compliance",
+ "stargate-invoice",
 ]
 
 [[package]]

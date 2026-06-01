@@ -1,0 +1,31 @@
+# Contributing
+
+## Local hooks
+
+Install [pre-commit](https://pre-commit.com/) and enable the repository hooks:
+
+```sh
+pip install pre-commit
+pre-commit install
+```
+
+Hooks run on each commit and enforce:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy -- -D warnings`
+- ABI snapshot hygiene (`abis/*.json` must change together with `contracts/*/src/`)
+
+Run all hooks manually:
+
+```sh
+pre-commit run --all-files
+```
+
+## ABI snapshots
+
+After changing contract interfaces, regenerate and verify ABI metadata:
+
+```sh
+make update-abi-snapshots
+make check-abi-snapshots
+```

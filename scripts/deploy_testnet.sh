@@ -25,3 +25,16 @@ JSON
 
 echo "Contract deployment metadata written to abis/deployed.testnet.json"
 echo "Replace placeholder IDs with soroban contract deploy output before backend integration."
+
+if [ -f .env.testnet ]; then
+  # shellcheck disable=SC1091
+  set -a
+  source .env.testnet
+  set +a
+fi
+
+export STELLAR_NETWORK="${STELLAR_NETWORK:-testnet}"
+export INVOICE_CONTRACT_ID="${INVOICE_CONTRACT_ID:-C...}"
+export TREASURY_CONTRACT_ID="${TREASURY_CONTRACT_ID:-C...}"
+export COMPLIANCE_CONTRACT_ID="${COMPLIANCE_CONTRACT_ID:-C...}"
+scripts/export_deployed_addresses.sh

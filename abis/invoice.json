@@ -6,8 +6,12 @@
     "create_invoice",
     "mark_paid",
     "get_invoice",
+    "get_invoice_status",
+    "cancel_invoice",
+    "request_refund",
+    "batch_expire",
     "pause",
     "unpause"
   ],
-  "events": ["invoice_created", "invoice_paid", "invoice_expired", "contract_paused", "contract_unpaused"]
+  "events": ["invoice_created", "invoice_paid", "invoice_expired", "invoice_cancelled", "invoice_refund_req", "contract_paused", "contract_unpaused"]
 }

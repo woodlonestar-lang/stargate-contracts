@@ -11,9 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # rust-toolchain.toml pins the exact channel, targets, and components
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.95.0"
           targets: wasm32-unknown-unknown
+          components: rustfmt,clippy
       # Cache Rust toolchain and target/ directory to speed up builds
       - uses: Swatinem/rust-cache@v2
       # Verify code formatting: fail if cargo fmt would make changes
@@ -27,12 +30,23 @@ jobs:
       # Build WASM binaries for Soroban runtime
       - run: cargo build --target wasm32-unknown-unknown --release
 
+  # Audit dependencies for known vulnerabilities and license/ban violations
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
   # Fail when committed abis/*.json drift from contract sources without an explicit update.
   abi-drift:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95.0"
       - uses: Swatinem/rust-cache@v2
       - name: Detect ABI metadata drift
         run: |

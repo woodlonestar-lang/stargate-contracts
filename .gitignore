@@ -4,3 +4,4 @@ target/
 .env.testnet
 *.wasm
 artifacts/addresses.json
+**/test_snapshots/

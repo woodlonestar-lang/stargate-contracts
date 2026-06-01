@@ -317,6 +317,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "approval_weight"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "approvals"
                       },
                       "val": {
@@ -397,6 +405,18 @@
                         },
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "DisputeCount"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 0
                         }
                       },
                       {
@@ -815,6 +835,14 @@
                       "hi": 0,
                       "lo": 10000000
                     }
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "approval_weight"
+                  },
+                  "val": {
+                    "u32": 1
                   }
                 },
                 {

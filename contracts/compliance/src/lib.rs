@@ -1,7 +1,7 @@
 #![no_std]
 
 mod allowlist;
-pub use allowlist::DataKey;
+pub use allowlist::{ComplianceError, DataKey};
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
 
@@ -10,10 +10,14 @@ pub struct ComplianceContract;
 
 #[contractimpl]
 impl ComplianceContract {
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), ComplianceError> {
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(ComplianceError::AlreadyInitialized);
+        }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
     }
 
     pub fn is_allowed(env: Env, address: Address) -> bool {

@@ -216,3 +216,15 @@ fn emits_address_cleared_event() {
     // Events are captured by the snapshot test harness; no additional assertions needed here.
     let _ = env;
 }
+
+#[test]
+#[should_panic]
+fn double_initialize_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let id = env.register_contract(None, ComplianceContract);
+    let client = ComplianceContractClient::new(&env, &id);
+    client.initialize(&admin);
+    client.initialize(&admin); // must panic with AlreadyInitialized
+}

@@ -30,6 +30,7 @@ fn test_create_invoice_succeeds() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.id, 1);
@@ -37,6 +38,7 @@ fn test_create_invoice_succeeds() {
     assert_eq!(invoice.amount_usdc, 10_000_000);
     assert_eq!(invoice.gross_usdc, 10_250_000);
     assert_eq!(invoice.payer, MaybeAddress::None);
+    assert_eq!(invoice.merchant_nonce, 0);
 }
 
 #[test]
@@ -52,6 +54,7 @@ fn test_mark_paid_requires_admin() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     assert!(client.try_mark_paid(&rogue_admin, &id, &payer).is_err());
 }
@@ -68,6 +71,7 @@ fn test_expired_invoice_cannot_be_paid() {
         &1,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     env.ledger().with_mut(|ledger| ledger.timestamp += 2);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
@@ -85,7 +89,8 @@ fn test_pause_blocks_create_invoice() {
             &10_250_000,
             &3600,
             &MaybeBytes::None,
-            &MaybeBytes::None
+            &MaybeBytes::None,
+            &0
         )
         .is_err());
 }
@@ -102,6 +107,7 @@ fn test_pause_blocks_mark_paid() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.pause(&admin);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
@@ -119,6 +125,7 @@ fn test_double_payment_rejected() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.mark_paid(&admin, &id, &payer);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
@@ -154,6 +161,7 @@ fn test_payer_set_after_payment() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.mark_paid(&admin, &id, &payer);
     let invoice = client.get_invoice(&id);
@@ -172,6 +180,7 @@ fn test_expired_event_emitted_on_stale_mark_paid() {
         &1,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     env.ledger().with_mut(|ledger| ledger.timestamp += 2);
     let err = client
@@ -195,6 +204,7 @@ fn test_payment_at_exact_expiry_is_rejected() {
         &10,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     env.ledger().with_mut(|ledger| ledger.timestamp = 10);
     let err = client
@@ -216,6 +226,7 @@ fn test_payment_before_expiry_succeeds() {
         &10,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     env.ledger().with_mut(|ledger| ledger.timestamp = 9);
     client.mark_paid(&admin, &id, &payer);
@@ -253,7 +264,8 @@ fn test_zero_duration_invoice_rejected() {
             &10_250_000,
             &0,
             &MaybeBytes::None,
-            &MaybeBytes::None
+            &MaybeBytes::None,
+            &0
         )
         .is_err());
 }
@@ -270,7 +282,8 @@ fn test_expiry_overflow_rejected() {
             &10_250_000,
             &1,
             &MaybeBytes::None,
-            &MaybeBytes::None
+            &MaybeBytes::None,
+            &0
         )
         .is_err());
 }
@@ -288,6 +301,7 @@ fn test_event_stream_redis_webhook_compatibility() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.id, 1);
@@ -321,6 +335,7 @@ fn test_grace_window_allows_payment_after_expiry() {
         &10,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.set_grace_window(&admin, &5);
     // timestamp = 12: past expires_at=10 but within grace (effective deadline = 15)
@@ -341,6 +356,7 @@ fn test_grace_window_still_rejects_after_grace_period() {
         &10,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.set_grace_window(&admin, &5);
     // timestamp = 15: exactly at effective deadline → rejected
@@ -380,6 +396,7 @@ fn test_sub_usdc_amount_rejected() {
             &3600,
             &MaybeBytes::None,
             &MaybeBytes::None,
+            &0,
         )
         .unwrap_err()
         .unwrap();
@@ -399,6 +416,7 @@ fn test_sub_usdc_gross_rejected() {
             &3600,
             &MaybeBytes::None,
             &MaybeBytes::None,
+            &0,
         )
         .unwrap_err()
         .unwrap();
@@ -417,6 +435,7 @@ fn test_whole_usdc_amounts_accepted() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     assert_eq!(id, 1);
 }
@@ -435,6 +454,7 @@ fn test_release_escrow_transitions_paid_to_released() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.mark_paid(&admin, &id, &payer);
     client.release_escrow(&admin, &id);
@@ -452,11 +472,9 @@ fn test_release_escrow_requires_paid_status() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
-    let err = client
-        .try_release_escrow(&admin, &id)
-        .unwrap_err()
-        .unwrap();
+    let err = client.try_release_escrow(&admin, &id).unwrap_err().unwrap();
     assert_eq!(err, InvoiceError::NotPaid);
 }
 
@@ -473,6 +491,7 @@ fn test_release_escrow_requires_admin() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.mark_paid(&admin, &id, &payer);
     assert!(client.try_release_escrow(&rogue, &id).is_err());
@@ -587,6 +606,7 @@ fn test_create_invoice_blocked_when_paused() {
             &3600,
             &MaybeBytes::None,
             &MaybeBytes::None,
+            &0,
         )
         .is_err());
 }
@@ -603,6 +623,7 @@ fn test_mark_paid_blocked_when_paused() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.pause(&admin);
     assert!(client.try_mark_paid(&admin, &id, &payer).is_err());
@@ -620,6 +641,7 @@ fn test_create_invoice_unauthorized_merchant() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     let err = client
         .try_cancel_invoice(&unauthorized, &id)
@@ -639,6 +661,7 @@ fn test_invoice_create_to_expired_flow() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
@@ -666,10 +689,132 @@ fn test_invoice_create_to_paid_escrow_flow() {
         &3600,
         &MaybeBytes::None,
         &MaybeBytes::None,
+        &0,
     );
     client.mark_paid(&admin, &id, &payer);
     let paid = client.get_invoice(&id);
     assert_eq!(paid.status, InvoiceStatus::Paid);
     assert_eq!(paid.payer, MaybeAddress::Some(payer));
     assert!(paid.paid_at.is_some());
+}
+
+// --- #58: merchant nonce tests ---
+
+#[test]
+fn test_duplicate_nonce_rejected() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_000_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &42,
+    );
+    let err = client
+        .try_create_invoice(
+            &merchant,
+            &10_000_000,
+            &10_000_000,
+            &3600,
+            &MaybeBytes::None,
+            &MaybeBytes::None,
+            &42,
+        )
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, InvoiceError::DuplicateNonce);
+}
+
+#[test]
+fn test_different_nonces_accepted() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let id1 = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_000_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &1,
+    );
+    let id2 = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_000_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &2,
+    );
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn test_zero_nonce_skips_idempotency_check() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let id1 = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &0,
+    );
+    let id2 = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_250_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &0,
+    );
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn test_nonce_stored_on_invoice() {
+    let (env, _admin, client) = setup();
+    let merchant = Address::generate(&env);
+    let id = client.create_invoice(
+        &merchant,
+        &10_000_000,
+        &10_000_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &99,
+    );
+    assert_eq!(client.get_invoice(&id).merchant_nonce, 99);
+}
+
+#[test]
+fn test_same_nonce_different_merchants_accepted() {
+    let (env, _admin, client) = setup();
+    let merchant1 = Address::generate(&env);
+    let merchant2 = Address::generate(&env);
+    client.create_invoice(
+        &merchant1,
+        &10_000_000,
+        &10_000_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &7,
+    );
+    client.create_invoice(
+        &merchant2,
+        &10_000_000,
+        &10_000_000,
+        &3600,
+        &MaybeBytes::None,
+        &MaybeBytes::None,
+        &7,
+    );
 }

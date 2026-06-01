@@ -47,6 +47,12 @@ impl InvoiceContract {
             .unwrap_or(0u64)
     }
 
+    // --- #58: merchant invoice nonce ---
+
+    /// Create an invoice with an optional merchant-supplied nonce for idempotency.
+    /// Pass `merchant_nonce = 0` to skip nonce enforcement.
+    /// A non-zero nonce that has already been used for this merchant is rejected.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_invoice(
         env: Env,
         merchant: Address,
@@ -55,6 +61,7 @@ impl InvoiceContract {
         expires_in_seconds: u64,
         metadata_hash: MaybeBytes,
         payment_link_hash: MaybeBytes,
+        merchant_nonce: u64,
     ) -> Result<u64, InvoiceError> {
         merchant.require_auth();
         require_not_paused(&env)?;
@@ -64,6 +71,15 @@ impl InvoiceContract {
 
         if expires_in_seconds == 0 {
             return Err(InvoiceError::ZeroDuration);
+        }
+
+        // #58: reject duplicate merchant nonce
+        if merchant_nonce != 0 {
+            let nonce_key = DataKey::MerchantNonce(merchant.clone(), merchant_nonce);
+            if env.storage().persistent().has(&nonce_key) {
+                return Err(InvoiceError::DuplicateNonce);
+            }
+            env.storage().persistent().set(&nonce_key, &true);
         }
 
         let count: u64 = env
@@ -88,6 +104,7 @@ impl InvoiceContract {
             payer: MaybeAddress::None,
             metadata_hash,
             payment_link_hash,
+            merchant_nonce,
         };
 
         env.storage()
@@ -166,7 +183,8 @@ impl InvoiceContract {
         Ok(())
     }
 
-    pub fn get_invoice(env: Env, id: u64) -> Result<Invoice, InvoiceError> {        env.storage()
+    pub fn get_invoice(env: Env, id: u64) -> Result<Invoice, InvoiceError> {
+        env.storage()
             .persistent()
             .get(&DataKey::Invoice(id))
             .ok_or(InvoiceError::NotFound)

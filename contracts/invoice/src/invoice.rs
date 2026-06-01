@@ -21,6 +21,8 @@ pub enum InvoiceError {
     NotReleased = 11,
     /// Amount is below the minimum USDC unit (must be >= USDC_FACTOR stroops).
     AmountPrecision = 12,
+    /// Merchant nonce has already been used for a previous invoice.
+    DuplicateNonce = 13,
 }
 
 #[contracttype]
@@ -64,6 +66,8 @@ pub struct Invoice {
     pub payer: MaybeAddress,
     pub metadata_hash: MaybeBytes,
     pub payment_link_hash: MaybeBytes,
+    /// Merchant-supplied nonce for storefront idempotency (0 = no nonce).
+    pub merchant_nonce: u64,
 }
 
 #[contracttype]
@@ -75,4 +79,6 @@ pub enum DataKey {
     Paused,
     /// Configurable grace window (seconds) added to expires_at during mark_paid.
     GraceWindow,
+    /// Tracks used merchant nonces: (merchant_address, nonce) → bool.
+    MerchantNonce(Address, u64),
 }

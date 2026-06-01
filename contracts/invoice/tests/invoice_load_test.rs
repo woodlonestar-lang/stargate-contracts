@@ -41,6 +41,7 @@ fn high_volume_invoice_creation_storage_budget() {
             &3600,
             &MaybeBytes::None,
             &MaybeBytes::None,
+            &0,
         );
         assert_eq!(id, i);
         last_id = id;

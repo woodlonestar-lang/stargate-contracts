@@ -25,6 +25,11 @@ deploy:
 snapshot:
     @./scripts/generate_abi_metadata.sh abis
 
+# Verify committed ABI snapshots match contract sources (no writes)
+check-snapshot:
+    @./scripts/generate_abi_metadata.sh /tmp/stargate-abis-check
+    @diff -ru abis/ /tmp/stargate-abis-check/
+
 # Check dependencies for vulnerabilities and license issues
 deny:
     cargo deny check

@@ -77,12 +77,16 @@ Committed ABI metadata in `abis/` is generated from contract sources. Before ope
 
 ```sh
 make update-abi-snapshots
+# or
+just snapshot
 ```
 
 Confirm the tree is clean:
 
 ```sh
 make check-abi-snapshots
+# or
+just check-snapshot
 git diff --exit-code abis/
 ```
 

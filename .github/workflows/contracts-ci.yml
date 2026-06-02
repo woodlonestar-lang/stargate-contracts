@@ -53,6 +53,6 @@ jobs:
           set -euo pipefail
           scripts/generate_abi_metadata.sh /tmp/abis-regenerated
           if ! diff -ru abis/ /tmp/abis-regenerated/; then
-            echo "::error::ABI metadata drift detected. Update abis/ with: scripts/generate_abi_metadata.sh"
+            echo "::error::ABI metadata drift detected. Regenerate with: make update-abi-snapshots  (or: just snapshot)"
             exit 1
           fi

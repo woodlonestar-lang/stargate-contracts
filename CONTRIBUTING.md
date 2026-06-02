@@ -27,5 +27,10 @@ After changing contract interfaces, regenerate and verify ABI metadata:
 
 ```sh
 make update-abi-snapshots
+# or
+just snapshot
+
 make check-abi-snapshots
+# or
+just check-snapshot
 ```

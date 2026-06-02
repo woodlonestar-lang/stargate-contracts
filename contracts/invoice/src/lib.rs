@@ -200,6 +200,7 @@ impl InvoiceContract {
     }
 
     // merchant or admin may cancel a pending invoice
+    // Issue #49: merchant or admin may cancel a pending invoice
     pub fn cancel_invoice(env: Env, caller: Address, id: u64) -> Result<(), InvoiceError> {
         caller.require_auth();
         require_not_paused(&env)?;
@@ -226,6 +227,24 @@ impl InvoiceContract {
         Ok(())
     }
 
+    pub fn batch_expire(env: Env, admin: Address, ids: Vec<u64>) -> Result<u32, InvoiceError> {
+        require_admin(&env, &admin)?;
+        let now = env.ledger().timestamp();
+        let mut expired_count: u32 = 0;
+        for id in ids.iter() {
+            let key = DataKey::Invoice(id);
+            if let Some(mut invoice) = env.storage().persistent().get::<DataKey, Invoice>(&key) {
+                if invoice.status == InvoiceStatus::Pending && now >= invoice.expires_at {
+                    invoice.status = InvoiceStatus::Expired;
+                    env.storage().persistent().set(&key, &invoice);
+                    events::invoice_expired(&env, id, &invoice);
+                    expired_count += 1;
+                }
+            }
+        }
+        Ok(expired_count)
+    }
+
     // payer may request a refund on a paid invoice (escrow dispute)
     pub fn request_refund(env: Env, payer: Address, id: u64) -> Result<(), InvoiceError> {
         payer.require_auth();
@@ -250,24 +269,6 @@ impl InvoiceContract {
             .set(&DataKey::Invoice(id), &invoice);
         events::invoice_refund_requested(&env, id, &invoice);
         Ok(())
-    }
-
-    pub fn batch_expire(env: Env, admin: Address, ids: Vec<u64>) -> Result<u32, InvoiceError> {
-        require_admin(&env, &admin)?;
-        let now = env.ledger().timestamp();
-        let mut expired_count: u32 = 0;
-        for id in ids.iter() {
-            let key = DataKey::Invoice(id);
-            if let Some(mut invoice) = env.storage().persistent().get::<DataKey, Invoice>(&key) {
-                if invoice.status == InvoiceStatus::Pending && now >= invoice.expires_at {
-                    invoice.status = InvoiceStatus::Expired;
-                    env.storage().persistent().set(&key, &invoice);
-                    events::invoice_expired(&env, id, &invoice);
-                    expired_count += 1;
-                }
-            }
-        }
-        Ok(expired_count)
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<(), InvoiceError> {

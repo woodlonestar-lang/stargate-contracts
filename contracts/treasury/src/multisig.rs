@@ -18,7 +18,7 @@ pub enum TreasuryError {
     TokenNotAllowed = 12,
     RotationNotFound = 13,
     RotationAlreadyExecuted = 14,
-    SettlementOnHold = 12,
+    SettlementOnHold = 15,
 }
 
 // Issue #48: reason codes attached to a held settlement; None means not on hold

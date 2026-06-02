@@ -9,9 +9,14 @@
     "execute_settlement",
     "get_pending_settlements",
     "pause",
-    "unpause"
+    "unpause",
+    "raise_dispute",
+    "resolve_dispute",
+    "deposit",
+    "withdraw"
   ],
-  "execute_settlement_params": ["signer: Address", "settlement_id: u64", "token_contract: Address"],
+  "threshold": "2-of-3"
+  "execute_settlement_params": ["signer: home", "settlement_id: u64", "token_contract: Address"],
   "threshold": "2-of-3",
   "events": [
     "treasury_initialized",

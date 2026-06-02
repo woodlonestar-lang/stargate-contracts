@@ -1,7 +1,7 @@
 #![no_std]
 
 mod allowlist;
-pub use allowlist::DataKey;
+pub use allowlist::{ComplianceError, DataKey};
 
 use soroban_sdk::{contract, contracterror, contractimpl, Address, Env, Symbol};
 
@@ -11,6 +11,7 @@ use soroban_sdk::{contract, contracterror, contractimpl, Address, Env, Symbol};
 pub enum ContractError {
     Unauthorized = 1,
     ContractPaused = 2,
+    AlreadyInitialized = 3,
 }
 
 #[contract]
@@ -18,13 +19,14 @@ pub struct ComplianceContract;
 
 #[contractimpl]
 impl ComplianceContract {
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), ContractError> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("AlreadyInitialized");
+            return Err(ContractError::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
+        Ok(())
     }
 
     pub fn is_allowed(env: Env, address: Address) -> bool {
@@ -61,6 +63,10 @@ impl ComplianceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Allowed(address.clone()), &true);
+        // Remove any expiry so this becomes a permanent allow.
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AllowedUntil(address.clone()));
         env.events()
             .publish((Symbol::new(&env, "address_allowed"),), address);
         Ok(())
@@ -80,7 +86,12 @@ impl ComplianceContract {
 
     /// Allow an address until a specific ledger timestamp (seconds since epoch).
     /// After expiry, `is_allowed` returns false even if the Allowed flag is set.
-    pub fn allow_address_until(env: Env, admin: Address, address: Address, expires_at: u64) -> Result<(), ContractError> {
+    pub fn allow_address_until(
+        env: Env,
+        admin: Address,
+        address: Address,
+        expires_at: u64,
+    ) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
         Self::require_not_paused(&env)?;
         env.storage()
@@ -97,7 +108,11 @@ impl ComplianceContract {
     }
 
     /// Initiate a two-step admin transfer. The pending admin must call accept_admin.
-    pub fn transfer_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), ContractError> {
+    pub fn transfer_admin(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+    ) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
         env.storage()
             .instance()
@@ -108,7 +123,7 @@ impl ComplianceContract {
     }
 
     /// Complete the admin transfer. Must be called by the pending admin.
-    pub fn accept_admin(env: Env, new_admin: Address) {
+    pub fn accept_admin(env: Env, new_admin: Address) -> Result<(), ContractError> {
         new_admin.require_auth();
         let pending: Address = env
             .storage()
@@ -116,12 +131,13 @@ impl ComplianceContract {
             .get(&DataKey::PendingAdmin)
             .expect("NoPendingAdmin");
         if pending != new_admin {
-            panic!("Unauthorized");
+            return Err(ContractError::Unauthorized);
         }
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         env.storage().instance().remove(&DataKey::PendingAdmin);
         env.events()
             .publish((Symbol::new(&env, "admin_transferred"),), new_admin);
+        Ok(())
     }
 
     pub fn clear_address(env: Env, admin: Address, address: Address) -> Result<(), ContractError> {
@@ -162,7 +178,6 @@ impl ComplianceContract {
         Ok(())
     }
 
-    fn require_not_paused(env: &Env) {
     fn require_not_paused(env: &Env) -> Result<(), ContractError> {
         let paused: bool = env
             .storage()

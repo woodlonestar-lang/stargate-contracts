@@ -174,11 +174,11 @@ fn unpause_emits_event_and_restores_allow() {
 }
 
 #[test]
-#[should_panic(expected = "AlreadyInitialized")]
 fn reinitialize_is_rejected() {
     let (env, _admin, _subject, client) = setup();
     let attacker = Address::generate(&env);
-    client.initialize(&attacker);
+    let result = client.try_initialize(&attacker);
+    assert_eq!(result, Err(Ok(ContractError::AlreadyInitialized)));
 }
 
 // Verification: address_allowed event schema
@@ -326,7 +326,7 @@ fn batch_allow_then_block_subset() {
 fn temp_allow_before_expiry_is_allowed() {
     let (env, admin, subject, client) = setup();
     let now = env.ledger().timestamp();
-    client.allow_address_until(&admin, &subject, now + 1000);
+    client.allow_address_until(&admin, &subject, &(now + 1000));
     assert!(client.is_allowed(&subject));
 }
 
@@ -335,7 +335,7 @@ fn temp_allow_after_expiry_is_denied() {
     let (env, admin, subject, client) = setup();
     let now = env.ledger().timestamp();
     // expires in the past
-    client.allow_address_until(&admin, &subject, now);
+    client.allow_address_until(&admin, &subject, &now);
     assert!(!client.is_allowed(&subject));
 }
 
@@ -343,7 +343,7 @@ fn temp_allow_after_expiry_is_denied() {
 fn temp_allow_blocked_address_is_denied_regardless_of_expiry() {
     let (env, admin, subject, client) = setup();
     let now = env.ledger().timestamp();
-    client.allow_address_until(&admin, &subject, now + 1000);
+    client.allow_address_until(&admin, &subject, &(now + 1000));
     client.block_address(&admin, &subject);
     assert!(!client.is_allowed(&subject));
 }
@@ -353,7 +353,7 @@ fn temp_allow_cleared_removes_expiry_block() {
     let (env, admin, subject, client) = setup();
     let now = env.ledger().timestamp();
     // set expired temp allow
-    client.allow_address_until(&admin, &subject, now);
+    client.allow_address_until(&admin, &subject, &now);
     assert!(!client.is_allowed(&subject));
     // clear restores permanent allow (no expiry key respected after clear)
     client.clear_address(&admin, &subject);
@@ -383,10 +383,9 @@ fn admin_transfer_old_admin_loses_privileges() {
     let new_admin = Address::generate(&env);
     client.transfer_admin(&admin, &new_admin);
     client.accept_admin(&new_admin);
-    // old admin can no longer allow (should panic)
-    let result = std::panic::catch_unwind(|| {
-        client.allow_address(&admin, &subject);
-    });
+    // old admin can no longer allow
+    // old admin can no longer allow (should return an error)
+    let result = client.try_allow_address(&admin, &subject);
     assert!(result.is_err());
 }
 
@@ -406,9 +405,7 @@ fn admin_transfer_wrong_acceptor_panics() {
     let new_admin = Address::generate(&env);
     let impostor = Address::generate(&env);
     client.transfer_admin(&admin, &new_admin);
-    let result = std::panic::catch_unwind(|| {
-        client.accept_admin(&impostor);
-    });
+    let result = client.try_accept_admin(&impostor);
     assert!(result.is_err());
 }
 

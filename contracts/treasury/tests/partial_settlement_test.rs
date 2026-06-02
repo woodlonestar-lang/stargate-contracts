@@ -17,70 +17,30 @@ fn setup(env: &Env, total: i128) -> (TreasuryContractClient, Address, Address, u
 }
 
 #[test]
-fn partial_settle_deducts_amount_and_sets_partial_status() {
+fn partially_execute_sets_partial_status() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, _admin, token_id, sid) = setup(&env, 10_000_000);
+    let (client, admin, token_id, sid) = setup(&env, 10_000_000);
 
-    let s = client.partial_settle(&sid, &3_000_000, &token_id);
-    assert_eq!(s.amount, 7_000_000);
-    assert_eq!(s.status, SettlementStatus::PartiallySettled);
+    client.partially_execute_settlement(&admin, &sid, &3_000_000, &token_id);
+    let s = client.get_settlement(&sid);
+    assert_eq!(s.status, SettlementStatus::PartiallyExecuted);
 }
 
 #[test]
-fn partial_settle_full_amount_marks_executed() {
+fn partially_executed_settlement_absent_from_pending_list() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, _admin, token_id, sid) = setup(&env, 10_000_000);
+    let (client, admin, token_id, sid) = setup(&env, 10_000_000);
 
-    let s = client.partial_settle(&sid, &10_000_000, &token_id);
-    assert_eq!(s.amount, 0);
-    assert_eq!(s.status, SettlementStatus::Executed);
-}
-
-#[test]
-fn partial_settle_twice_correctly_tracks_remainder() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, _admin, token_id, sid) = setup(&env, 10_000_000);
-
-    client.partial_settle(&sid, &4_000_000, &token_id);
-    let s = client.partial_settle(&sid, &3_000_000, &token_id);
-
-    assert_eq!(s.amount, 3_000_000);
-    assert_eq!(s.status, SettlementStatus::PartiallySettled);
-}
-
-#[test]
-fn partially_settled_still_appears_in_pending_list() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, _admin, token_id, sid) = setup(&env, 10_000_000);
-
-    client.partial_settle(&sid, &4_000_000, &token_id);
-    let pending = client.get_pending_settlements();
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending.get(0).unwrap().id, sid);
-    assert_eq!(
-        pending.get(0).unwrap().status,
-        SettlementStatus::PartiallySettled
-    );
-}
-
-#[test]
-fn executed_settlement_absent_from_pending_list() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let (client, _admin, token_id, sid) = setup(&env, 10_000_000);
-
-    client.partial_settle(&sid, &10_000_000, &token_id);
+    client.partially_execute_settlement(&admin, &sid, &3_000_000, &token_id);
     let pending = client.get_pending_settlements();
     assert_eq!(pending.len(), 0);
 }
 
 #[test]
 #[should_panic(expected = "ThresholdNotMet")]
-fn partial_settle_without_sufficient_approvals_panics() {
+fn partially_execute_without_sufficient_approvals_panics() {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
@@ -91,15 +51,37 @@ fn partial_settle_without_sufficient_approvals_panics() {
     let token_id = env.register_stellar_asset_contract(admin.clone());
     soroban_sdk::token::StellarAssetClient::new(&env, &token_id).mint(&contract_id, &1_000_000);
     let sid = client.propose_settlement(&admin, &merchant, &1_000_000);
-    client.partial_settle(&sid, &500_000, &token_id);
+    client.partially_execute_settlement(&admin, &sid, &500_000, &token_id);
 }
 
 #[test]
-#[should_panic(expected = "InvalidPartialAmount")]
-fn partial_settle_exceeding_remainder_panics() {
+#[should_panic(expected = "InvalidAmount")]
+fn partially_execute_exceeding_amount_panics() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, _admin, token_id, sid) = setup(&env, 1_000_000);
+    let (client, admin, token_id, sid) = setup(&env, 1_000_000);
 
-    client.partial_settle(&sid, &2_000_000, &token_id);
+    client.partially_execute_settlement(&admin, &sid, &2_000_000, &token_id);
+}
+
+#[test]
+#[should_panic(expected = "InvalidAmount")]
+fn partially_execute_zero_amount_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token_id, sid) = setup(&env, 1_000_000);
+
+    client.partially_execute_settlement(&admin, &sid, &0, &token_id);
+}
+
+#[test]
+#[should_panic(expected = "AlreadyExecuted")]
+fn partially_execute_already_executed_panics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token_id, sid) = setup(&env, 1_000_000);
+
+    client.partially_execute_settlement(&admin, &sid, &500_000, &token_id);
+    // second call should panic — settlement is now PartiallyExecuted, not Pending
+    client.partially_execute_settlement(&admin, &sid, &200_000, &token_id);
 }

@@ -194,24 +194,6 @@ impl InvoiceContract {
         Ok(())
     }
 
-    pub fn batch_expire(env: Env, admin: Address, ids: Vec<u64>) -> Result<u32, InvoiceError> {
-        require_admin(&env, &admin)?;
-        let now = env.ledger().timestamp();
-        let mut expired_count: u32 = 0;
-        for id in ids.iter() {
-            let key = DataKey::Invoice(id);
-            if let Some(mut invoice) = env.storage().persistent().get::<DataKey, Invoice>(&key) {
-                if invoice.status == InvoiceStatus::Pending && now >= invoice.expires_at {
-                    invoice.status = InvoiceStatus::Expired;
-                    env.storage().persistent().set(&key, &invoice);
-                    events::invoice_expired(&env, id, &invoice);
-                    expired_count += 1;
-                }
-            }
-        }
-        Ok(expired_count)
-    }
-
     pub fn pause(env: Env, admin: Address) -> Result<(), InvoiceError> {
         require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);

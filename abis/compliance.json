@@ -11,7 +11,7 @@
     "unpause"
   ],
   "errors": {
-    "1": "Unauthorized",
+    "1": "unpermitted",
     "2": "ContractPaused"
   }
 }

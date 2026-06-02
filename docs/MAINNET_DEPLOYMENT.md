@@ -13,6 +13,18 @@ Mainnet deployment must not run from a single local shell. The checked-in `scrip
 - Production USDC asset issuer verified against official Circle/Stellar documentation.
 - Mainnet Horizon and Soroban RPC health checks passing.
 
+## Required Environment Variables
+
+Deployment scripts require the following environment variables to be set:
+
+- `SOROBAN_RPC_URL`: Soroban RPC endpoint (e.g., `https://soroban-mainnet.stellar.org`)
+- `SOROBAN_NETWORK_PASSPHRASE`: Network passphrase for mainnet signing
+- `INVOICE_CONTRACT_ID`: Deployed invoice contract ID (for integration)
+- `TREASURY_CONTRACT_ID`: Deployed treasury contract ID (for integration)
+- `COMPLIANCE_CONTRACT_ID`: Deployed compliance contract ID (for integration)
+
+Set these via environment variables or in a `.env.mainnet` file that the deployment script sources before execution. Scripts will fail fast if required variables are missing.
+
 ## Ceremony
 
 1. Open a deployment issue with target commit SHA, expected WASM hashes, admins, and treasury signers.

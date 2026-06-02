@@ -384,6 +384,7 @@ fn admin_transfer_old_admin_loses_privileges() {
     client.transfer_admin(&admin, &new_admin);
     client.accept_admin(&new_admin);
     // old admin can no longer allow
+    // old admin can no longer allow (should return an error)
     let result = client.try_allow_address(&admin, &subject);
     assert!(result.is_err());
 }

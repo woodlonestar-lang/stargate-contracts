@@ -180,6 +180,20 @@ fn rotated_out_signer_cannot_propose() {
 }
 
 #[test]
+#[should_panic(expected = "UnauthorizedSigner")]
+fn rotated_out_signer_cannot_approve() {
+    let env = Env::default();
+    let (client, admin, _) = setup(&env, 2);
+    let signer = Address::generate(&env);
+    let merchant = Address::generate(&env);
+
+    client.set_signer(&admin, &signer, &1);
+    let sid = client.propose_settlement(&admin, &merchant, &1_000);
+    client.set_signer(&admin, &signer, &0);
+    client.approve_settlement(&signer, &sid);
+}
+
+#[test]
 fn rotation_after_approval_preserves_weight_snapshot() {
     let env = Env::default();
     let (client, admin, _) = setup(&env, 2);

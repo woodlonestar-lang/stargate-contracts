@@ -383,10 +383,8 @@ fn admin_transfer_old_admin_loses_privileges() {
     let new_admin = Address::generate(&env);
     client.transfer_admin(&admin, &new_admin);
     client.accept_admin(&new_admin);
-    // old admin can no longer allow (should panic)
-    let result = std::panic::catch_unwind(|| {
-        client.allow_address(&admin, &subject);
-    });
+    // old admin can no longer allow (should return an error)
+    let result = client.try_allow_address(&admin, &subject);
     assert!(result.is_err());
 }
 
@@ -406,9 +404,7 @@ fn admin_transfer_wrong_acceptor_panics() {
     let new_admin = Address::generate(&env);
     let impostor = Address::generate(&env);
     client.transfer_admin(&admin, &new_admin);
-    let result = std::panic::catch_unwind(|| {
-        client.accept_admin(&impostor);
-    });
+    let result = client.try_accept_admin(&impostor);
     assert!(result.is_err());
 }
 

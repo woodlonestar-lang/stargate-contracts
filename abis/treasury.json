@@ -11,7 +11,7 @@
     "pause",
     "unpause"
   ],
-  "execute_settlement_params": ["signer: Address", "settlement_id: u64", "token_contract: Address"],
+  "execute_settlement_params": ["signer: home", "settlement_id: u64", "token_contract: Address"],
   "threshold": "2-of-3",
   "events": [
     "treasury_initialized",

@@ -7,7 +7,9 @@ mod validation;
 pub use invoice::{DataKey, Invoice, InvoiceError, InvoiceStatus, MaybeAddress, MaybeBytes};
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
-use validation::{require_admin, require_not_paused, require_positive_amount};
+use validation::{
+    require_admin, require_not_paused, require_positive_amount, require_usdc_precision,
+};
 
 #[contract]
 pub struct InvoiceContract;
@@ -25,6 +27,32 @@ impl InvoiceContract {
         Ok(())
     }
 
+    // --- #55: configurable grace window ---
+
+    /// Set the grace window (seconds) added to expires_at when checking payment validity.
+    /// Allows a short buffer after quote expiry for in-flight payments.
+    pub fn set_grace_window(env: Env, admin: Address, seconds: u64) -> Result<(), InvoiceError> {
+        require_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::GraceWindow, &seconds);
+        Ok(())
+    }
+
+    /// Return the current grace window in seconds (0 if not set).
+    pub fn get_grace_window(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::GraceWindow)
+            .unwrap_or(0u64)
+    }
+
+    // --- #58: merchant invoice nonce ---
+
+    /// Create an invoice with an optional merchant-supplied nonce for idempotency.
+    /// Pass `merchant_nonce = 0` to skip nonce enforcement.
+    /// A non-zero nonce that has already been used for this merchant is rejected.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_invoice(
         env: Env,
         merchant: Address,
@@ -33,13 +61,25 @@ impl InvoiceContract {
         expires_in_seconds: u64,
         metadata_hash: MaybeBytes,
         payment_link_hash: MaybeBytes,
+        merchant_nonce: u64,
     ) -> Result<u64, InvoiceError> {
         merchant.require_auth();
         require_not_paused(&env)?;
         require_positive_amount(amount_usdc, gross_usdc)?;
+        // #57: USDC decimal precision guardrail
+        require_usdc_precision(amount_usdc, gross_usdc)?;
 
         if expires_in_seconds == 0 {
             return Err(InvoiceError::ZeroDuration);
+        }
+
+        // #58: reject duplicate merchant nonce
+        if merchant_nonce != 0 {
+            let nonce_key = DataKey::MerchantNonce(merchant.clone(), merchant_nonce);
+            if env.storage().persistent().has(&nonce_key) {
+                return Err(InvoiceError::DuplicateNonce);
+            }
+            env.storage().persistent().set(&nonce_key, &true);
         }
 
         let count: u64 = env
@@ -64,6 +104,7 @@ impl InvoiceContract {
             payer: MaybeAddress::None,
             metadata_hash,
             payment_link_hash,
+            merchant_nonce,
         };
 
         env.storage()
@@ -92,8 +133,18 @@ impl InvoiceContract {
         if invoice.status != InvoiceStatus::Pending {
             return Err(InvoiceError::NotPending);
         }
-        // expires_at boundary is exclusive: payment at exactly expires_at is rejected
-        if env.ledger().timestamp() >= invoice.expires_at {
+
+        // #55: apply grace window — payment is valid up to expires_at + grace_window
+        let grace: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::GraceWindow)
+            .unwrap_or(0u64);
+        let effective_deadline = invoice
+            .expires_at
+            .checked_add(grace)
+            .unwrap_or(invoice.expires_at);
+        if env.ledger().timestamp() >= effective_deadline {
             return Err(InvoiceError::Expired);
         }
 
@@ -104,6 +155,31 @@ impl InvoiceContract {
             .persistent()
             .set(&DataKey::Invoice(id), &invoice);
         events::invoice_paid(&env, id, &invoice);
+        Ok(())
+    }
+
+    // --- #56: escrow release entrypoint ---
+
+    /// Release escrow for a paid invoice. Admin-only. Transitions Paid → Released.
+    pub fn release_escrow(env: Env, admin: Address, id: u64) -> Result<(), InvoiceError> {
+        require_admin(&env, &admin)?;
+        require_not_paused(&env)?;
+
+        let mut invoice: Invoice = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Invoice(id))
+            .ok_or(InvoiceError::NotFound)?;
+
+        if invoice.status != InvoiceStatus::Paid {
+            return Err(InvoiceError::NotPaid);
+        }
+
+        invoice.status = InvoiceStatus::Released;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(id), &invoice);
+        events::escrow_released(&env, id, &invoice);
         Ok(())
     }
 
@@ -123,6 +199,7 @@ impl InvoiceContract {
         Ok(invoice.status)
     }
 
+    // merchant or admin may cancel a pending invoice
     // Issue #49: merchant or admin may cancel a pending invoice
     pub fn cancel_invoice(env: Env, caller: Address, id: u64) -> Result<(), InvoiceError> {
         caller.require_auth();

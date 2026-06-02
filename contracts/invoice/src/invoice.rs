@@ -1,5 +1,8 @@
 use soroban_sdk::{contracterror, contracttype, Address, Bytes};
 
+/// USDC on Stellar uses 7 decimal places: 1 USDC = 10_000_000 stroops.
+pub const USDC_FACTOR: i128 = 10_000_000;
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -14,6 +17,12 @@ pub enum InvoiceError {
     ZeroDuration = 8,
     ExpiryOverflow = 9,
     NotPaid = 10,
+    /// Invoice has not been released from escrow.
+    NotReleased = 11,
+    /// Amount is below the minimum USDC unit (must be >= USDC_FACTOR stroops).
+    AmountPrecision = 12,
+    /// Merchant nonce has already been used for a previous invoice.
+    DuplicateNonce = 13,
 }
 
 #[contracttype]
@@ -24,6 +33,8 @@ pub enum InvoiceStatus {
     Expired,
     Cancelled,
     RefundRequested,
+    /// Escrow funds have been released to the merchant after payment confirmation.
+    Released,
 }
 
 // contracttype enum wrappers for optional complex types; Option<Address> and
@@ -55,6 +66,8 @@ pub struct Invoice {
     pub payer: MaybeAddress,
     pub metadata_hash: MaybeBytes,
     pub payment_link_hash: MaybeBytes,
+    /// Merchant-supplied nonce for storefront idempotency (0 = no nonce).
+    pub merchant_nonce: u64,
 }
 
 #[contracttype]
@@ -64,4 +77,8 @@ pub enum DataKey {
     InvoiceCount,
     Admin,
     Paused,
+    /// Configurable grace window (seconds) added to expires_at during mark_paid.
+    GraceWindow,
+    /// Tracks used merchant nonces: (merchant_address, nonce) → bool.
+    MerchantNonce(Address, u64),
 }

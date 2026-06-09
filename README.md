@@ -1,5 +1,8 @@
 # Stargate Contracts
 
+> **Stargate Protocol** — The Stripe for Stellar.
+> Founded and built by **[dreamgene](https://github.com/dreamgeneX)** · Founder & CEO
+
 Stellar/Soroban smart contracts for Stargate Protocol.
 
 This repository owns invoice escrow state, payment validation, multi-sig treasury settlement, and compliance gates.
